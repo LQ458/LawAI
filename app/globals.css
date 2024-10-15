@@ -1,0 +1,9 @@
+/* @import 'primereact/resources/themes/saga-blue/theme.css';
+@import 'primeicons/primeicons.css';
+@import 'primeflex/primeflex.css'; */
+@tailwind utilities;
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+}
