@@ -34,13 +34,6 @@ export default function Home() {
   //   fetchChats();
   // }, []);
 
-  useEffect(() => {
-    if (!initChat && chatLists.length > 0) {
-      setSelectedChat(chatLists[0]);
-      setInitChat(true);
-    }
-  }, [chatLists, initChat]);
-
   const requestAI = async () => {
     const response = await axios.post("/api/fetchAi", {
       id: selectedChat.id,
@@ -124,7 +117,7 @@ export default function Home() {
             </div>
             <Divider />
             <div className="flex flex-col">
-              {selectedChat?.messages.map((msg, index) => (
+              {selectedChat?.messages?.map((msg, index) => (
                 <Chat key={index} role={msg.role} message={msg.content} />
               ))}
             </div>
