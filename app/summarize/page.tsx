@@ -20,7 +20,7 @@ export default function SummarizePage() {
   const requestSummary = async () => {
     setLoading(true);
     try {
-      const response = await axios.post<SummaryResponse>("/api/summarize", {
+      const response = await axios.post("/api/summary", {
         text: textToSummarize,
       });
       setSummary(response.data.summary);
