@@ -5,6 +5,7 @@ import "./globals.css";
 import "primereact/resources/themes/saga-blue/theme.css";
 import "primeicons/primeicons.css";
 import "primeflex/primeflex.css";
+import SessionProviderWrapper from "./SessionProviderWrapper";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -58,7 +59,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <PrimeReactProvider>{children}</PrimeReactProvider>
+        <SessionProviderWrapper>
+          <PrimeReactProvider>{children}</PrimeReactProvider>
+        </SessionProviderWrapper>
       </body>
     </html>
   );

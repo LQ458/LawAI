@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
+import { NextRequest, NextResponse } from "next/server";
+import axios from "axios";
 
 export async function POST(req: NextRequest) {
   const { text } = await req.json();
@@ -9,13 +9,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Text to summarize is required" });
   }
 
-  let AK = 'vpDCmt5NExqfH0kMUyV5UG4p';
-  let SK = 'ZjqhhKJ6gcFA9nq0KpwEUWmuOQ6VshiB';
+  const AK = "vpDCmt5NExqfH0kMUyV5UG4p";
+  const SK = "ZjqhhKJ6gcFA9nq0KpwEUWmuOQ6VshiB";
 
   try {
     // Request access token
-    let options = {
-      method: 'POST',
+    const options = {
+      method: "POST",
       url: `https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=${AK}&client_secret=${SK}`,
     };
 
@@ -26,11 +26,11 @@ export async function POST(req: NextRequest) {
 
         // Second request for summary
         return axios({
-          method: 'POST',
+          method: "POST",
           url: `https://aip.baidubce.com/rpc/2.0/nlp/v1/news_summary?charset=UTF-8&access_token=${accessToken}`,
           headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
           data: JSON.stringify({
             content: text,

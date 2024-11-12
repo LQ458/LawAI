@@ -1,3 +1,4 @@
+// NextAuth 用户登录验证逻辑
 import DBconnect from "@/lib/mongodb";
 import User from "@/models/user";
 import NextAuth from "next-auth";
@@ -20,7 +21,7 @@ const handler = NextAuth({
         password: {},
       },
       async authorize(credentials) {
-        await DBconnect;
+        await DBconnect();
         const username = credentials?.username || "";
         const user = await User.findOne({ username });
         if (!user) {
@@ -34,7 +35,8 @@ const handler = NextAuth({
         if (passwordCorrect) {
           return {
             id: user._id,
-            user,
+            name: user.username,
+            email: user.email,
           };
         }
 

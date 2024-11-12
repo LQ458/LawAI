@@ -1,5 +1,10 @@
 @tailwind utilities;
 
+:root {
+  --chat-title: 16px;
+  --chat-subtitle: 14px;
+}
+
 @layer utilities {
   .scrollbar-thumb-rounded::-webkit-scrollbar {
     width: 8px;
@@ -29,4 +34,128 @@
 body {
   font-family: Arial, Helvetica, sans-serif;
   margin: 0;
+}
+
+.chatCard div {
+  font-size: var(--chat-title);
+}
+
+.chatCard p {
+  font-size: var(--chat-subtitle);
+}
+
+.chatCard .p-card-content {
+  padding-top: 0rem;
+  padding-bottom: 0rem;
+}
+
+.chatCard .p-card-body {
+  padding: 0.7rem;
+}
+
+.chatCard .delete-button {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.chatCard:hover .delete-button {
+  opacity: 1;
+}
+
+/* 添加删除按钮的悬停效果 */
+.delete-button:hover {
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+/* 添加平滑滚动 */
+.chat-container {
+  scroll-behavior: smooth;
+}
+
+/* 自定义滚动条样式 */
+.chat-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.chat-container::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 添加临时消息的样式 */
+.temp-message {
+  opacity: 0.7;
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* 添加打字动画效果 */
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.typing-indicator {
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  background-color: currentColor;
+  margin-left: 4px;
+  animation: blink 1s infinite;
+}
+
+/* 用户消息样式 */
+.user-message {
+  background-color: #e3f2fd;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  margin-left: auto;
+  max-width: 85%;
+}
+
+/* AI消息样式 */
+.assistant-message {
+  background-color: #f5f5f5;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  margin-right: auto;
+  max-width: 85%;
+}
+
+/* 临时消息的过渡效果 */
+.temp-message {
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* 消息容器的通用样式 */
+.message-container {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+/* 头像样式 */
+.avatar-button {
+  min-width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

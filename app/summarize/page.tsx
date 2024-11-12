@@ -9,10 +9,6 @@ import { Button } from "primereact/button";
 import { ProgressSpinner } from "primereact/progressspinner";
 import axios from "axios";
 
-interface SummaryResponse {
-  summary: string;
-}
-
 export default function SummarizePage() {
   const [textToSummarize, setTextToSummarize] = useState("");
   const [summary, setSummary] = useState("");
@@ -76,7 +72,10 @@ export default function SummarizePage() {
                 </Card>
               ) : (
                 <Card className="w-full p-4">
-                  <p>No summary yet. Please enter text and click "Summarize".</p>
+                  <p>
+                    No summary yet. Please enter text and click
+                    &quot;Summarize&quot;.
+                  </p>
                 </Card>
               )}
             </div>

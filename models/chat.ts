@@ -1,17 +1,5 @@
-import mongoose, { Document, Model, Schema } from "mongoose";
-
-interface Message {
-  role: string;
-  content: string;
-  timestamp: Date; // 添加时间戳字段
-}
-
-interface Chat extends Document {
-  title: string;
-  chatNum: number;
-  time: string;
-  messages: Message[];
-}
+import mongoose, { Model, Schema } from "mongoose";
+import { Message, Chat } from "@/types";
 
 const messageSchema = new Schema<Message>({
   role: { type: String, required: true },
@@ -21,11 +9,11 @@ const messageSchema = new Schema<Message>({
 
 const chatSchema = new Schema<Chat>({
   title: { type: String, required: true },
-  chatNum: { type: Number, required: true },
+  userId: { type: String, required: true },
   time: { type: String, required: true },
   messages: { type: [messageSchema], required: true },
 });
 
-const Chat: Model<Chat> =
+const ChatModel: Model<Chat> =
   mongoose.models.Chat || mongoose.model<Chat>("Chat", chatSchema);
-export default Chat;
+export default ChatModel;

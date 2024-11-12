@@ -1,144 +1,130 @@
+// AI 服务的请求和调取会话逻辑
 import { NextResponse, NextRequest } from "next/server";
-import axios from "axios";
 import Chat from "@/models/chat"; // 确保路径正确
 import DBconnect from "@/lib/mongodb";
-import { Document } from "mongoose"; // 添加 Document 导入
-
-// 定义消息和会话接口
-interface Message {
-  role: string;
-  content: string;
-  timestamp: Date; // 添加时间戳字段
-}
-
-interface Session {
-  messages: Message[];
-}
-
-interface IChat extends Document {
-  title: string;
-  chatNum: number;
-  time: string;
-  messages: Message[];
-}
-
-// 使用内存存储来保存会话上下文
-const sessions: Record<string, Session> = {};
-
-// 获取会话，如果不存在则创建一个新的会话
-function getSession(sessionId: string): Session {
-  if (!sessions[sessionId]) {
-    sessions[sessionId] = { messages: [] };
-  }
-  return sessions[sessionId];
-}
-
-// 更新会话，添加新的消息
-function updateSession(sessionId: string, message: Message): void {
-  const session = getSession(sessionId);
-  session.messages.push(message);
-}
+import User from "@/models/user";
+import { ZhipuAI } from "zhipuai-sdk-nodejs-v4";
+import { MessageOptions } from "@/types";
+import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 
 export async function POST(req: NextRequest) {
-  await DBconnect();
-  const { id, message } = await req.json();
-
-  let sessionId = id;
-
-  // 如果没有提供 id，则创建一个新的聊天记录
-  if (!sessionId) {
-    const newChat: IChat = new Chat({
-      title: "New Chat",
-      chatNum: 0,
-      time: new Date().toISOString(),
-      messages: [],
-    });
-    await newChat.save();
-    sessionId = newChat.id.toString();
-  }
-
-  // 获取当前会话上下文
-  const session = getSession(sessionId);
-
-  // 添加用户消息到会话上下文
-  const userMessage: Message = {
-    role: "user",
-    content: message.content,
-    timestamp: new Date(), // 添加时间戳
-  };
-  updateSession(sessionId, userMessage);
-
-  // 查找或创建聊天记录
-  let chat = await Chat.findById(sessionId);
-  if (!chat) {
-    chat = new Chat({
-      _id: sessionId,
-      title: "New Chat",
-      chatNum: 0,
-      time: new Date().toISOString(),
-      messages: [],
-    });
-  }
-
-  // 添加消息到聊天记录
-  chat.messages.push(userMessage); // 修改为 userMessage
-  chat.chatNum += 1;
-  await chat.save();
-
-  // 发送请求到 AI 服务，包含完整的上下文
-  const baseUrl = process.env.AI_BASE_URL;
-  const API_KEY = process.env.AI_API_KEY;
-
-  if (!baseUrl) {
-    return NextResponse.json(
-      { error: "AI_BASE_URL is not defined" },
-      { status: 500 },
-    );
-  }
-
-  if (!API_KEY) {
-    return NextResponse.json(
-      { error: "AI_API_KEY is not defined" },
-      { status: 500 },
-    );
-  }
-
   try {
-    const response = await axios.post(
-      baseUrl,
-      {
-        model: "glm-4",
-        messages: session.messages,
+    await DBconnect();
+    const { username, chatId, message } = await req.json();
+
+    if (!username || !message) {
+      return NextResponse.json(
+        { error: "Username and message are required" },
+        { status: 400 },
+      );
+    }
+
+    // 查找用户
+    const user = await User.findOne({ username });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    let chat;
+    let sessionId = chatId;
+
+    // 如果没有 chatId，创建新的聊天
+    if (!chatId) {
+      chat = new Chat({
+        title: message.substring(0, 20) + (message.length > 20 ? "..." : ""),
+        userId: user._id,
+        time: getCurrentTimeInLocalTimeZone(),
+        messages: [{ role: "user", content: message, timestamp: new Date() }],
+      });
+      await chat.save();
+      sessionId = chat._id.toString();
+    } else {
+      chat = await Chat.findById(chatId);
+      if (!chat) {
+        return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+      }
+      // 添加用户消息到现有聊天
+      chat.messages.push({
+        role: "user",
+        content: message,
+        timestamp: new Date(),
+      });
+      await chat.save();
+    }
+
+    // 创建流式响应
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY! });
+          const result = await ai.createCompletions({
+            model: "glm-4",
+            messages: chat.messages as MessageOptions[],
+            stream: true,
+          });
+
+          let aiResponse = "";
+
+          for await (const chunk of result as AsyncIterable<Buffer>) {
+            const chunkString = chunk.toString("utf-8");
+            const lines = chunkString.split("\n");
+
+            for (const line of lines) {
+              if (line.trim().startsWith("data: ")) {
+                const jsonStr = line.trim().slice(6);
+                if (jsonStr === "[DONE]") continue;
+
+                try {
+                  const chunkJson = JSON.parse(jsonStr);
+                  const content = chunkJson.choices?.[0]?.delta?.content;
+                  if (content) {
+                    aiResponse += content;
+                    // 只发送实际内容
+                    controller.enqueue(
+                      new TextEncoder().encode(`data: ${content}\n\n`),
+                    );
+                  }
+                } catch (jsonError) {
+                  console.warn("Invalid JSON chunk:", jsonStr, jsonError);
+                }
+              }
+            }
+          }
+
+          // 保存完整的 AI 响应到数据库
+          if (aiResponse) {
+            chat.messages.push({
+              role: "assistant",
+              content: aiResponse,
+              timestamp: new Date(),
+            });
+            chat.time = getCurrentTimeInLocalTimeZone();
+            await chat.save();
+          }
+
+          // 直接关闭流，不发送完成信号
+          controller.close();
+        } catch (error) {
+          console.error("Stream processing error:", error);
+          controller.error(error);
+        }
       },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${API_KEY}`,
-        },
-        responseType: "stream",
-      },
-    );
+    });
 
-    const stream = response.data;
-
-    // 添加 AI 响应到会话上下文
-    const aiMessage: Message = {
-      role: "assistant",
-      content: stream,
-      timestamp: new Date(), // 添加时间戳
-    };
-    updateSession(sessionId, aiMessage);
-
-    return new NextResponse(stream, {
+    // 返回流式响应
+    return new Response(stream, {
       headers: {
-        "Content-Type": "application/json",
-        "Transfer-Encoding": "chunked",
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Session-Id": sessionId,
+        "X-Chat-Title": encodeURIComponent(chat.title),
       },
     });
   } catch (error) {
-    console.error("Error making API request:", error);
+    console.error("Error in fetchAi:", error);
     return NextResponse.json(
-      { error: "Failed to fetch data" },
+      { error: "Failed to process request" },
       { status: 500 },
     );
   }

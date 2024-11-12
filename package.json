@@ -20,7 +20,8 @@
     "primereact": "^10.8.4",
     "rate-limiter-flexible": "^5.0.3",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "zhipuai-sdk-nodejs-v4": "^0.1.12"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

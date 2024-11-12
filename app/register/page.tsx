@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 import React from "react";
 import { useState, useEffect, useRef } from "react";
@@ -69,7 +70,7 @@ const Register = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }; // 用户注册逻辑
 
   return (
     <div className="h-screen w-screen flex flex-col justify-center">
