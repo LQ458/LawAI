@@ -9,8 +9,10 @@ import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 
 export async function POST(req: NextRequest) {
   try {
-    await DBconnect();
     const { username, chatId, message } = await req.json();
+    let sessionId = chatId;
+    console.log("---chatId---", sessionId);
+    await DBconnect();
 
     if (!username || !message) {
       return NextResponse.json(
@@ -26,7 +28,6 @@ export async function POST(req: NextRequest) {
     }
 
     let chat;
-    let sessionId = chatId;
 
     // 如果没有 chatId，创建新的聊天
     if (!chatId) {
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
       await chat.save();
       sessionId = chat._id.toString();
     } else {
-      chat = await Chat.findById(chatId);
+      chat = await Chat.findById(sessionId);
       if (!chat) {
         return NextResponse.json({ error: "Chat not found" }, { status: 404 });
       }
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
         try {
           const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY! });
           const result = await ai.createCompletions({
-            model: "glm-4",
+            model: process.env.AI_MODEL || "glm-4-flashx",
             messages: chat.messages as MessageOptions[],
             stream: true,
           });
@@ -106,6 +107,15 @@ export async function POST(req: NextRequest) {
           controller.close();
         } catch (error) {
           console.error("Stream processing error:", error);
+          if (chat && chat.messages.length > 0) {
+            chat.messages.pop(); // 删除最后一条消息
+            chat.time = getCurrentTimeInLocalTimeZone();
+            await chat.save();
+            console.log(
+              "Successfully removed last message from chat:",
+              chat._id,
+            );
+          }
           controller.error(error);
         }
       },

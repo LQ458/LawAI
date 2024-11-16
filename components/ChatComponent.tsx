@@ -1,57 +1,57 @@
 "use client";
-import { Button } from "primereact/button";
-import { Card } from "primereact/card";
-import type { ChatProps } from "@/types";
+import React from "react";
+import MarkdownRenderer from "./MarkdownRenderer";
+import { Avatar } from "primereact/avatar";
+import { MessageRole } from "@/types";
 
-export default function Chat({
+interface ChatComponentProps {
+  role: MessageRole;
+  message: string;
+  isTemporary?: boolean;
+}
+
+const ChatComponent: React.FC<ChatComponentProps> = ({
   role,
   message,
   isTemporary = false,
-}: ChatProps) {
-  switch (role) {
-    case "user":
-      return (
-        <div
-          className={`flex flex-col gap-3 mb-4 w-full relative pl-4 pr-4 ${isTemporary ? "opacity-60" : ""}`}
-        >
-          <div className="flex items-start justify-end gap-3">
-            {message !== "" && (
-              <Card className="max-w-[85%] bg-blue-100">
-                <p className="m-0 break-words">{message}</p>
-              </Card>
-            )}
-            <Button
-              icon="pi pi-user"
-              text
-              raised
-              aria-label="User"
-              className="min-w-[2.5rem] h-[2.5rem]"
-            />
-          </div>
-        </div>
-      );
+}) => {
+  return (
+    <div
+      className={`flex ${
+        role === "user" ? "justify-end" : "justify-start"
+      } items-start gap-2 p-4`}
+    >
+      {role === "assistant" && (
+        <Avatar
+          icon="pi pi-slack"
+          size="large"
+          shape="circle"
+          className="bg-purple-100 text-purple-600"
+        />
+      )}
+      <div
+        className={`max-w-[80%] rounded-lg p-4 ${
+          role === "user"
+            ? "bg-blue-500 text-white"
+            : "bg-gray-100 text-gray-800"
+        } ${isTemporary ? "opacity-50" : ""}`}
+      >
+        {role === "assistant" ? (
+          <MarkdownRenderer content={message} />
+        ) : (
+          <p className="whitespace-pre-wrap">{message}</p>
+        )}
+      </div>
+      {role === "user" && (
+        <Avatar
+          icon="pi pi-user"
+          size="large"
+          shape="circle"
+          className="bg-blue-500 text-white"
+        />
+      )}
+    </div>
+  );
+};
 
-    case "assistant":
-      return (
-        <div className="flex flex-col gap-3 mb-4 w-full relative pl-4 pr-4">
-          <div className="flex items-start gap-3">
-            <Button
-              icon="pi pi-android"
-              text
-              raised
-              aria-label="Assistant"
-              className="min-w-[2.5rem] h-[2.5rem]"
-            />
-            {message !== "" && (
-              <Card className="max-w-[85%]">
-                <p className="m-0 break-words whitespace-pre-wrap">{message}</p>
-              </Card>
-            )}
-          </div>
-        </div>
-      );
-
-    default:
-      return null;
-  }
-}
+export default ChatComponent;

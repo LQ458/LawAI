@@ -1,0 +1,54 @@
+.code-block-wrapper {
+  margin: 1rem 0;
+  background: #f6f8fa;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.code-block-header {
+  background: #e1e4e8;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: #24292e;
+}
+
+.markdown-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.markdown-table th,
+.markdown-table td {
+  border: 1px solid #dfe2e5;
+  padding: 0.6rem 1rem;
+}
+
+.markdown-table th {
+  background-color: #f6f8fa;
+}
+
+/* 数学公式样式 */
+.katex-display {
+  margin: 1rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 代码高亮样式 */
+pre {
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier,
+    monospace;
+}
+
+/* 内联代码样式 */
+:not(pre) > code {
+  background: rgba(27, 31, 35, 0.05);
+  border-radius: 3px;
+  padding: 0.2em 0.4em;
+}

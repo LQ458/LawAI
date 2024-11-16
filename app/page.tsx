@@ -1,4 +1,3 @@
-// 主页
 "use client";
 import { Splitter, SplitterPanel } from "primereact/splitter";
 import { Card } from "primereact/card";
@@ -110,7 +109,7 @@ export default function Home() {
     }
   }, [status, session]); // 处理未登录状态
 
-  // 获取聊天列表
+  // 修改获取聊天列表的函数
   const fetchChats = useCallback(async () => {
     if (!session?.user?.name) return;
 
@@ -154,7 +153,20 @@ export default function Home() {
             setSelectedChat(chats[0]);
           }
 
-          return chats;
+          // 过滤掉重复的聊天
+          const uniqueChats = chats.reduce((acc: Chat[], curr: Chat) => {
+            const exists = acc.find(
+              (chat) =>
+                chat._id === curr._id ||
+                (!chat._id && !curr._id && chat.time === curr.time),
+            );
+            if (!exists) {
+              acc.push(curr);
+            }
+            return acc;
+          }, []);
+
+          return uniqueChats;
         });
 
         // 初始化聊天信息显示
@@ -180,7 +192,7 @@ export default function Home() {
     }
   }, [session?.user?.name, fetchChats, initChat]);
 
-  // 处理滚动
+  // 处理���动
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop } = e.currentTarget;
     setAutoScroll(
@@ -253,7 +265,7 @@ export default function Home() {
       setMessage("");
       setIsSending(true);
 
-      // 保存请求前的聊天状态，用于失败时回滚
+      // 保存请求的聊天状态，用于失败时回滚
       const previousChat = { ...selectedChat };
 
       try {
@@ -303,7 +315,7 @@ export default function Home() {
           },
           body: JSON.stringify({
             username: session?.user?.name,
-            chatId: selectedChat._id,
+            chatId: selectedChat._id.toString(),
             message: currentMessage,
           }),
         });
@@ -346,12 +358,13 @@ export default function Home() {
                 return { ...prevChat, messages };
               });
 
-              // 更新聊天列表
+              // 更新聊天列表 - 确保使用相同的条件
               setChatLists((prevLists) =>
                 prevLists.map((chat) => {
                   if (
-                    chat._id === initialChat._id ||
-                    (!chat._id && !initialChat._id)
+                    chat.time === selectedChat.time &&
+                    (chat._id === selectedChat._id ||
+                      (!chat._id && !selectedChat._id))
                   ) {
                     const messages = [...chat.messages];
                     const lastMessage = messages[messages.length - 1];
@@ -377,7 +390,7 @@ export default function Home() {
           }
         }
 
-        // 更新最终状态
+        // 更新最终状
         const finalChat = {
           ...initialChat,
           messages: [
@@ -387,29 +400,48 @@ export default function Home() {
         };
         updateChatInfo(finalChat as Chat);
 
-        // 如果是新聊天，更新标题
+        // 如果是新聊天，更新标题和ID
         if (!selectedChat._id) {
-          const sessionId = response.url.split("chatId=")[1]?.split("&")[0];
+          const sessionId = response.headers.get("X-Session-Id");
           if (sessionId) {
+            const updatedChat: Chat = {
+              ...finalChat,
+              _id: sessionId,
+              messages: finalChat.messages.map((msg) => ({
+                ...msg,
+                role: msg.role as MessageRole,
+              })),
+            };
+
+            setSelectedChat(updatedChat);
+
+            // 使用时间戳来确保只更新正确的新聊天
+            setChatLists((prevLists) =>
+              prevLists.map((chat) =>
+                chat.time === selectedChat.time && !chat._id
+                  ? updatedChat
+                  : chat,
+              ),
+            );
+
             updateChatTitle(sessionId, newTitle);
           }
         } else {
-          // 如果是现有聊天，直接更新内容
+          // 现有聊天的更逻辑保持不变
           setChatLists((prevLists) =>
             prevLists.map((chat) => {
               if (chat._id === selectedChat._id) {
-                const messages = [...chat.messages];
-                const lastMessage = messages[messages.length - 1];
-                if (lastMessage && lastMessage.role === "assistant") {
-                  lastMessage.content = result;
-                } else {
-                  messages.push({
-                    role: "assistant",
-                    content: result,
-                    timestamp: new Date(),
-                  });
-                }
-                return { ...chat, messages };
+                return {
+                  ...chat,
+                  messages: [
+                    ...chat.messages,
+                    {
+                      role: "assistant",
+                      content: result,
+                      timestamp: new Date(),
+                    },
+                  ],
+                };
               }
               return chat;
             }),
@@ -562,30 +594,29 @@ export default function Home() {
     }
   }, [selectedChat?._id]); // 当选中的聊天改变时触发
 
-  // 监听 selectedChat 的变化
+  // 修改监听 selectedChat 的变化的 effect
   useEffect(() => {
     if (selectedChat) {
       setChatLists((prevLists) => {
-        // 检查是否已经存在相同的聊天
-        const chatExists = prevLists.some(
-          (chat) =>
-            chat._id === selectedChat._id ||
-            (!chat._id && !selectedChat._id && chat.title === "新的聊天"),
-        );
-
-        if (!chatExists) {
-          return [...prevLists, selectedChat];
+        // 对于已有ID的聊天，只更新不添加
+        if (selectedChat._id) {
+          return prevLists.map((chat) =>
+            chat._id === selectedChat._id ? selectedChat : chat,
+          );
         }
 
-        return prevLists.map((chat) => {
-          if (
-            chat._id === selectedChat._id ||
-            (!chat._id && !selectedChat._id && chat.title === "新的聊天")
-          ) {
-            return selectedChat;
-          }
-          return chat;
-        });
+        // 对于新聊天，检查是否已存在相同时间戳的聊天
+        const existingNewChat = prevLists.find(
+          (chat) => !chat._id && chat.time === selectedChat.time,
+        );
+
+        if (existingNewChat) {
+          return prevLists.map((chat) =>
+            !chat._id && chat.time === selectedChat.time ? selectedChat : chat,
+          );
+        }
+
+        return prevLists;
       });
     }
   }, [selectedChat]);

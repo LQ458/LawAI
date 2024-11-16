@@ -6,6 +6,7 @@ import "primereact/resources/themes/saga-blue/theme.css";
 import "primeicons/primeicons.css";
 import "primeflex/primeflex.css";
 import SessionProviderWrapper from "./SessionProviderWrapper";
+import "@/styles/markdown.css";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
