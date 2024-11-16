@@ -124,12 +124,12 @@ export default function Home() {
         const { chats } = await response.json();
 
         // 使用单个状态更新
-        setChatLists((prevLists) => {
+        setChatLists(() => {
           if (chats.length === 0) {
             const newChat = {
               _id: "",
               title: "新的聊天",
-              userId: session.user.name || "",
+              userId: session?.user?.name || "",
               time: getCurrentTimeInLocalTimeZone(),
               messages: [],
             };
@@ -140,13 +140,13 @@ export default function Home() {
           // 更新选中的聊天
           const currentSelectedId = selectedChat?._id;
           const updatedSelectedChat = currentSelectedId
-            ? chats.find((chat) => chat._id === currentSelectedId)
+            ? chats.find((chat : Chat) => chat._id === currentSelectedId)
             : chats[0];
 
           setSelectedChat(updatedSelectedChat || chats[0]);
 
           // 更新聊天信息
-          chats.forEach((chat) => updateChatInfo(chat));
+          chats.forEach((chat: Chat) => updateChatInfo(chat));
 
           return chats;
         });
@@ -173,9 +173,9 @@ export default function Home() {
   const createNewChat = useCallback(() => {
     // 检查是否已经存在"新的聊天"
     const existingNewChat = chatLists.find(
-      (chat) => chat.title === "新的聊天" && !chat._id,
+      (chat: Chat) => chat.title === "新的聊天" && !chat._id,
     );
-
+    
     if (existingNewChat) {
       setSelectedChat(existingNewChat);
       return;
