@@ -107,7 +107,7 @@ export default function Home() {
     if (status === "unauthenticated") {
       setVisible(true);
     }
-  }, [status, session]); // 处理未登录状态
+  }, [status]); // 处理未登录状态
 
   // 修改获取聊天列表的函数
   const fetchChats = useCallback(async () => {
@@ -123,55 +123,32 @@ export default function Home() {
       if (response.ok) {
         const { chats } = await response.json();
 
-        setChatLists(() => {
-          // 检查是否有非空聊天记录
-          const hasNonEmptyChats = chats.some(
-            (chat: Chat) => chat.messages.length > 0,
-          );
-
-          // 如果没有任何聊天或所有聊天都是空的，才添加"新的聊天"
-          if (chats.length === 0 || !hasNonEmptyChats) {
+        // 使用单个状态更新
+        setChatLists((prevLists) => {
+          if (chats.length === 0) {
             const newChat = {
               _id: "",
               title: "新的聊天",
-              userId: session?.user?.name || "",
+              userId: session.user.name || "",
               time: getCurrentTimeInLocalTimeZone(),
               messages: [],
             };
-            // 自动选择新的聊天
             setSelectedChat(newChat);
             return [newChat];
           }
 
-          // 找到第一个非空聊天
-          const firstNonEmptyChat = chats.find(
-            (chat: Chat) => chat.messages.length > 0,
-          );
-          if (firstNonEmptyChat) {
-            setSelectedChat(firstNonEmptyChat);
-          } else {
-            setSelectedChat(chats[0]);
-          }
+          // 更新选中的聊天
+          const currentSelectedId = selectedChat?._id;
+          const updatedSelectedChat = currentSelectedId
+            ? chats.find((chat) => chat._id === currentSelectedId)
+            : chats[0];
 
-          // 过滤掉重复的聊天
-          const uniqueChats = chats.reduce((acc: Chat[], curr: Chat) => {
-            const exists = acc.find(
-              (chat) =>
-                chat._id === curr._id ||
-                (!chat._id && !curr._id && chat.time === curr.time),
-            );
-            if (!exists) {
-              acc.push(curr);
-            }
-            return acc;
-          }, []);
+          setSelectedChat(updatedSelectedChat || chats[0]);
 
-          return uniqueChats;
-        });
+          // 更新聊天信息
+          chats.forEach((chat) => updateChatInfo(chat));
 
-        // 初始化聊天信息显示
-        chats.forEach((chat: Chat) => {
-          updateChatInfo(chat);
+          return chats;
         });
       }
     } catch (error) {
@@ -182,17 +159,9 @@ export default function Home() {
         detail: "获取聊天列表失败",
       });
     }
-  }, [session?.user?.name, updateChatInfo]);
+  }, [session?.user?.name, updateChatInfo]); // 移除 selectedChat 依赖
 
-  // 添加一个 useEffect 来处理初始化
-  useEffect(() => {
-    if (session?.user?.name && !initChat) {
-      fetchChats();
-      setInitChat(true);
-    }
-  }, [session?.user?.name, fetchChats, initChat]);
-
-  // 处理���动
+  // 处理动
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop } = e.currentTarget;
     setAutoScroll(
@@ -449,19 +418,28 @@ export default function Home() {
         }
       } catch (error) {
         console.error("Error:", error);
-        // 回滚状态
+        // 回滚到之前的状态
         setSelectedChat(previousChat);
-        setChatLists((prevLists) =>
-          prevLists.map((chat) =>
-            chat._id === selectedChat._id ? previousChat : chat,
-          ),
-        );
+
+        // 回滚聊天列表
+        setChatLists((prevLists) => {
+          // 如果是新聊天（没有_id），则从列表中移除
+          if (!previousChat._id) {
+            return prevLists.filter((chat) => chat.time !== previousChat.time);
+          }
+          // 如果是现有聊天，恢复到原始状态
+          return prevLists.map((chat) =>
+            chat._id === previousChat._id ? previousChat : chat,
+          );
+        });
+
+        // 回滚聊天信息
         updateChatInfo(previousChat);
 
         toast.current?.show({
           severity: "error",
           summary: "错误",
-          detail: "请求失败，请重试",
+          detail: "网络连接异常，请检查网络后重试",
           life: 3000,
         });
       } finally {
@@ -483,8 +461,12 @@ export default function Home() {
 
   // 初始化 effect
   useEffect(() => {
-    fetchChats();
-  }, [fetchChats]);
+    // 只在认证状态改变且已认证时初始化一次
+    if (status === "authenticated" && !initChat) {
+      fetchChats();
+      setInitChat(true);
+    }
+  }, [status, fetchChats, initChat]); // 移除其他不必要的依赖
 
   // 认证状态 effect
   useEffect(() => {
@@ -669,15 +651,24 @@ export default function Home() {
                 <h1 className="text-2xl">法律AI</h1>
                 <p>你的私人法律顾问。</p>
               </div>
-              <Button
-                icon="pi pi-plus"
-                className="self-center"
-                onClick={createNewChat}
-                tooltip="新建聊天"
-                disabled={chatLists.some(
-                  (chat) => chat.title === "新的聊天" && !chat._id,
-                )}
-              />
+              <div className="flex gap-2 self-center">
+                <Button
+                  icon="pi pi-sync"
+                  className="self-center"
+                  onClick={fetchChats}
+                  tooltip="刷新列表"
+                  disabled={status !== "authenticated"}
+                />
+                <Button
+                  icon="pi pi-plus"
+                  className="self-center"
+                  onClick={createNewChat}
+                  tooltip="新建聊天"
+                  disabled={chatLists.some(
+                    (chat) => chat.title === "新的聊天" && !chat._id,
+                  )}
+                />
+              </div>
             </div>
             <Divider className="mb-10" />
             <div className="flex flex-col gap-4 overflow-auto scrollbar-thin scrollbar-thumb-rounded">

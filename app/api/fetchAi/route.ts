@@ -11,7 +11,9 @@ export async function POST(req: NextRequest) {
   try {
     const { username, chatId, message } = await req.json();
     let sessionId = chatId;
-    console.log("---chatId---", sessionId);
+    let chat;
+    let newChatCreated = false; // 添加标记
+
     await DBconnect();
 
     if (!username || !message) {
@@ -27,18 +29,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    let chat;
-
     // 如果没有 chatId，创建新的聊天
     if (!chatId) {
-      chat = new Chat({
-        title: message.substring(0, 20) + (message.length > 20 ? "..." : ""),
-        userId: user._id,
-        time: getCurrentTimeInLocalTimeZone(),
-        messages: [{ role: "user", content: message, timestamp: new Date() }],
-      });
-      await chat.save();
-      sessionId = chat._id.toString();
+      try {
+        // 先检查是否已经存在相同标题的未完成聊天
+        const existingChat = await Chat.findOne({
+          userId: user._id,
+          title: message.substring(0, 20) + (message.length > 20 ? "..." : ""),
+          "messages.length": 1, // 只有一条消息的聊天
+        });
+
+        if (existingChat) {
+          chat = existingChat;
+          sessionId = existingChat._id.toString();
+        } else {
+          chat = new Chat({
+            title:
+              message.substring(0, 20) + (message.length > 20 ? "..." : ""),
+            userId: user._id,
+            time: getCurrentTimeInLocalTimeZone(),
+            messages: [
+              { role: "user", content: message, timestamp: new Date() },
+            ],
+          });
+          await chat.save();
+          sessionId = chat._id.toString();
+          newChatCreated = true;
+        }
+      } catch (error) {
+        console.error("Error creating new chat:", error);
+        throw error;
+      }
     } else {
       chat = await Chat.findById(sessionId);
       if (!chat) {
@@ -107,14 +128,20 @@ export async function POST(req: NextRequest) {
           controller.close();
         } catch (error) {
           console.error("Stream processing error:", error);
-          if (chat && chat.messages.length > 0) {
-            chat.messages.pop(); // 删除最后一条消息
+          // 如果是新创建的聊天且发生错误，删除整个聊天
+          if (newChatCreated) {
+            try {
+              await Chat.findByIdAndDelete(chat._id);
+              console.log("Deleted new chat due to error:", chat._id);
+            } catch (deleteError) {
+              console.error("Error deleting chat:", deleteError);
+            }
+          } else if (chat && chat.messages.length > 0) {
+            // 如果是现有聊天，只删除最后一条消息
+            chat.messages.pop();
             chat.time = getCurrentTimeInLocalTimeZone();
             await chat.save();
-            console.log(
-              "Successfully removed last message from chat:",
-              chat._id,
-            );
+            console.log("Removed last message from chat:", chat._id);
           }
           controller.error(error);
         }
