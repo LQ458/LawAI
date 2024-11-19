@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import MarkdownRenderer from "./MarkdownRenderer";
+import DynamicMarkdownRenderer from "./DynamicMarkdown";
 import { Avatar } from "primereact/avatar";
 import { MessageRole } from "@/types";
 
@@ -37,7 +37,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         } ${isTemporary ? "opacity-50" : ""}`}
       >
         {role === "assistant" ? (
-          <MarkdownRenderer content={message} />
+          <DynamicMarkdownRenderer content={message} />
         ) : (
           <p className="whitespace-pre-wrap">{message}</p>
         )}
