@@ -140,7 +140,7 @@ export default function Home() {
           // 更新选中的聊天
           const currentSelectedId = selectedChat?._id;
           const updatedSelectedChat = currentSelectedId
-            ? chats.find((chat : Chat) => chat._id === currentSelectedId)
+            ? chats.find((chat: Chat) => chat._id === currentSelectedId)
             : chats[0];
 
           setSelectedChat(updatedSelectedChat || chats[0]);
@@ -175,7 +175,7 @@ export default function Home() {
     const existingNewChat = chatLists.find(
       (chat: Chat) => chat.title === "新的聊天" && !chat._id,
     );
-    
+
     if (existingNewChat) {
       setSelectedChat(existingNewChat);
       return;
