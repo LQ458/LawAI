@@ -6,14 +6,14 @@ import { Divider } from "primereact/divider";
 import { Button } from "primereact/button";
 import ChatComponent from "@/components/ChatComponent";
 import { Toast } from "primereact/toast";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { Dialog } from "primereact/dialog";
-import Login from "../components/Login";
 import { InputTextarea } from "primereact/inputtextarea";
 import ScrollView from "@/components/ScrollView";
 import { Chat, MessageRole } from "@/types";
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
+import AuthForm from "../components/AuthForm";
 
 // 在组件外部定义一个不可变的时间和消息数量显示组件
 const StaticInfo = memo(({ time, count }: { time: string; count: number }) => (
@@ -27,7 +27,6 @@ export default function Home() {
   const [chatLists, setChatLists] = useState<Chat[]>([]); // 聊天列表
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null); // 当前选中的聊天
   const [initChat, setInitChat] = useState(false); // 是否初始化聊
-  const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true); // 添加自动滚动状态
@@ -43,6 +42,8 @@ export default function Home() {
   const [chatInfo, setChatInfo] = useState<
     Record<string, { time: string; count: number }>
   >({});
+
+  const [showAuth, setShowAuth] = useState(false);
 
   // 修改 ChatCard 组件
   const ChatCard = memo(
@@ -105,7 +106,7 @@ export default function Home() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      setVisible(true);
+      setShowAuth(true);
     }
   }, [status]); // 处理未登录状态
 
@@ -518,7 +519,7 @@ export default function Home() {
           detail: "聊天已删除",
         });
       } catch (error) {
-        console.error("删除聊天失败:", error);
+        console.error("删除聊天失���:", error);
         toast.current?.show({
           severity: "error",
           summary: "错误",
@@ -630,14 +631,14 @@ export default function Home() {
       <Toast ref={toast} />
       <ConfirmDialog />
       <Dialog
-        visible={visible}
-        modal
-        style={{ boxShadow: "none" }}
-        onHide={() => {
-          if (!visible) return;
-          setVisible(false);
-        }}
-        content={({ hide }) => <Login toast={toast} hide={hide} />}
+        visible={showAuth}
+        onHide={() => setShowAuth(false)}
+        content={() => (
+          <AuthForm 
+            toast={toast}
+            onSuccess={() => setShowAuth(false)}
+          />
+        )}
       />
       <Splitter className="h-full w-full">
         <SplitterPanel
@@ -667,6 +668,12 @@ export default function Home() {
                   disabled={chatLists.some(
                     (chat) => chat.title === "新的聊天" && !chat._id,
                   )}
+                />
+                <Button
+                  icon="pi pi-sign-out"
+                  className="self-center"
+                  onClick={() => signOut({ callbackUrl: window.location.origin })}
+                  tooltip="退出登录"
                 />
               </div>
             </div>

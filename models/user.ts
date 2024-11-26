@@ -1,50 +1,50 @@
 import mongoose from "mongoose";
 
-const Schema = mongoose.Schema;
+const accountSchema = new mongoose.Schema({
+  provider: String,
+  providerAccountId: String,
+  type: String
+});
 
-const userSchema = new Schema({
+const userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true,
     unique: true,
     validate: {
-      validator: function (v: string) {
-        return /^[^\W_]+$/.test(v);
+      validator: function(v: string) {
+        return /^[a-z0-9_]+$/.test(v);
       },
-      message: (props: { value: string }) =>
-        `${props.value} contains special characters`,
-    },
-  },
-  originalPassword: {
-    type: String,
-    required: true,
-    validate: {
-      validator: function (v: string) {
-        return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/.test(
-          v,
-        );
-      },
-      message: (props: { value: string }) => `${props.value} is not valid`,
-    },
+      message: "用户名只能包含小写字母、数字和下划线"
+    }
   },
   password: {
     type: String,
-    required: true,
+    required: true
   },
-  admin: {
-    type: Boolean,
-    required: true,
+  originalPassword: {
+    type: String,
+    required: true
   },
   email: {
     type: String,
     required: true,
-    unique: true,
+    unique: true
+  },
+  admin: {
+    type: Boolean,
+    default: false
   },
   image: {
     type: String,
-    default: null,
+    default: ""
   },
+  provider: {
+    type: String,
+    enum: ["credentials", "google"],
+    default: "credentials"
+  },
+  accounts: [accountSchema]
 });
 
-const User = mongoose.models.User || mongoose.model("User", userSchema);
-export default User;
+export default mongoose.models.User || mongoose.model("User", userSchema);

@@ -10,12 +10,15 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@auth/core": "^0.37.4",
+    "@auth/mongodb-adapter": "^3.7.4",
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
     "highlight.js": "^11.10.0",
     "katex": "^0.16.11",
     "markdown-it": "^14.1.0",
     "markdown-it-katex": "^2.0.3",
+    "mongodb": "^6.10.0",
     "mongoose": "^8.7.1",
     "next": "^14.2.15",
     "next-auth": "^4.24.8",
