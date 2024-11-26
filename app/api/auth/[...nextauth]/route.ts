@@ -4,9 +4,9 @@ import User from "@/models/user";
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { MongoDBAdapter } from "@auth/mongodb-adapter"
-import GoogleProvider from "next-auth/providers/google"
-import clientPromise from "@/lib/mongodb-adapter"
+import { MongoDBAdapter } from "@auth/mongodb-adapter";
+import GoogleProvider from "next-auth/providers/google";
+import clientPromise from "@/lib/mongodb-adapter";
 
 interface Account {
   provider: string;
@@ -22,7 +22,7 @@ const handler = NextAuth({
   pages: {
     signIn: "/",
     error: "/",
-    signOut: "/"
+    signOut: "/",
   },
   adapter: MongoDBAdapter(clientPromise),
   providers: [
@@ -34,8 +34,8 @@ const handler = NextAuth({
         params: {
           access_type: "offline",
           response_type: "code",
-          prompt: "consent"
-        }
+          prompt: "consent",
+        },
       },
     }),
     CredentialsProvider({
@@ -72,25 +72,32 @@ const handler = NextAuth({
       try {
         if (account?.provider === "google") {
           await DBconnect();
-          
+
           const existingUser = await User.findOne({ email: user.email });
-          
+
           if (existingUser) {
-            if (!existingUser.accounts || !existingUser.accounts.find((acc : Account) => acc.provider === "google")) {
+            if (
+              !existingUser.accounts ||
+              !existingUser.accounts.find(
+                (acc: Account) => acc.provider === "google",
+              )
+            ) {
               existingUser.accounts = existingUser.accounts || [];
               existingUser.accounts.push({
                 provider: "google",
                 providerAccountId: profile?.sub,
-                type: "oauth"
+                type: "oauth",
               });
               await existingUser.save();
             }
             return true;
           } else {
-            const username = `${user.email?.split('@')[0]}_${Math.random().toString(36).slice(2, 6)}`;
-            const randomPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).toUpperCase().slice(2);
+            const username = `${user.email?.split("@")[0]}_${Math.random().toString(36).slice(2, 6)}`;
+            const randomPassword =
+              Math.random().toString(36).slice(2) +
+              Math.random().toString(36).toUpperCase().slice(2);
             const hashedPassword = await bcrypt.hash(randomPassword, 10);
-            
+
             await User.create({
               username,
               email: user.email,
@@ -99,11 +106,13 @@ const handler = NextAuth({
               provider: "google",
               image: user.image || "",
               admin: false,
-              accounts: [{
-                provider: "google",
-                providerAccountId: profile?.sub,
-                type: "oauth"
-              }]
+              accounts: [
+                {
+                  provider: "google",
+                  providerAccountId: profile?.sub,
+                  type: "oauth",
+                },
+              ],
             });
           }
           return true;
@@ -135,7 +144,7 @@ const handler = NextAuth({
         console.error("Error in session callback:", error);
         return session;
       }
-    }
+    },
   },
   events: {
     async signIn(message) {
@@ -143,7 +152,7 @@ const handler = NextAuth({
     },
     async signOut(message) {
       console.log("Successful sign out", message);
-    }
+    },
   },
   debug: process.env.NODE_ENV === "development",
 });

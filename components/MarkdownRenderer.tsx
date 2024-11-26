@@ -120,7 +120,10 @@ const MarkdownRenderer: React.FC<MarkdownProps> = (props: {
       dir="auto"
     >
       {props.loading ? (
-        <i className="pi pi-spin pi-spinner text-gray-400 font-thin" style={{ fontSize: '3rem' }}></i>
+        <i
+          className="pi pi-spin pi-spinner text-gray-400 font-thin"
+          style={{ fontSize: "3rem" }}
+        ></i>
       ) : (
         <RenderedContent content={props.content} />
       )}

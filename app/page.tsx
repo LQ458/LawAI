@@ -26,7 +26,7 @@ StaticInfo.displayName = "StaticInfo";
 export default function Home() {
   const [chatLists, setChatLists] = useState<Chat[]>([]); // 聊天列表
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null); // 当前选中的聊天
-  const [initChat, setInitChat] = useState(false); // 是否初始化聊
+  const [initChat, setInitChat] = useState(false); // 是否初始化聊天
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true); // 添加自动滚动状态
@@ -43,7 +43,7 @@ export default function Home() {
     Record<string, { time: string; count: number }>
   >({});
 
-  const [showAuth, setShowAuth] = useState(false);
+  const [showAuth, setShowAuth] = useState(true);
 
   // 修改 ChatCard 组件
   const ChatCard = memo(
@@ -107,6 +107,8 @@ export default function Home() {
   useEffect(() => {
     if (status === "unauthenticated") {
       setShowAuth(true);
+    } else if (status === "authenticated") {
+      setShowAuth(false);
     }
   }, [status]); // 处理未登录状态
 
@@ -306,55 +308,60 @@ export default function Home() {
 
           for (const line of lines) {
             if (line.startsWith("data: ")) {
-              const content = line.slice(6);
-              if (content === "[DONE]") continue;
+              try {
+                const data = JSON.parse(line.slice(6));
+                const content = data.content;
+                if (content === "[DONE]") continue;
 
-              result += content;
+                result = content; // 使用完整的markdown内容
 
-              // 更新选中聊天的内容
-              setSelectedChat((prevChat) => {
-                if (!prevChat) return prevChat;
-                const messages = [...prevChat.messages];
-                const lastMessage = messages[messages.length - 1];
-                if (lastMessage && lastMessage.role === "assistant") {
-                  lastMessage.content = result;
-                } else {
-                  messages.push({
-                    role: "assistant",
-                    content: result,
-                    timestamp: new Date(),
-                  });
-                }
-                return { ...prevChat, messages };
-              });
-
-              // 更新聊天列表 - 确保使用相同的条件
-              setChatLists((prevLists) =>
-                prevLists.map((chat) => {
-                  if (
-                    chat.time === selectedChat.time &&
-                    (chat._id === selectedChat._id ||
-                      (!chat._id && !selectedChat._id))
-                  ) {
-                    const messages = [...chat.messages];
-                    const lastMessage = messages[messages.length - 1];
-                    if (lastMessage && lastMessage.role === "assistant") {
-                      lastMessage.content = result;
-                    } else {
-                      messages.push({
-                        role: "assistant",
-                        content: result,
-                        timestamp: new Date(),
-                      });
-                    }
-                    return { ...chat, messages };
+                // 更新选中聊天的内容
+                setSelectedChat((prevChat) => {
+                  if (!prevChat) return prevChat;
+                  const messages = [...prevChat.messages];
+                  const lastMessage = messages[messages.length - 1];
+                  if (lastMessage && lastMessage.role === "assistant") {
+                    lastMessage.content = result;
+                  } else {
+                    messages.push({
+                      role: "assistant",
+                      content: result,
+                      timestamp: new Date(),
+                    });
                   }
-                  return chat;
-                }),
-              );
+                  return { ...prevChat, messages };
+                });
 
-              if (autoScroll) {
-                chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                // 更新聊天列表 - 确保使用相同的条件
+                setChatLists((prevLists) =>
+                  prevLists.map((chat) => {
+                    if (
+                      chat.time === selectedChat.time &&
+                      (chat._id === selectedChat._id ||
+                        (!chat._id && !selectedChat._id))
+                    ) {
+                      const messages = [...chat.messages];
+                      const lastMessage = messages[messages.length - 1];
+                      if (lastMessage && lastMessage.role === "assistant") {
+                        lastMessage.content = result;
+                      } else {
+                        messages.push({
+                          role: "assistant",
+                          content: result,
+                          timestamp: new Date(),
+                        });
+                      }
+                      return { ...chat, messages };
+                    }
+                    return chat;
+                  }),
+                );
+
+                if (autoScroll) {
+                  chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                }
+              } catch (error) {
+                console.error("Error parsing chunk:", error);
               }
             }
           }
@@ -519,7 +526,7 @@ export default function Home() {
           detail: "聊天已删除",
         });
       } catch (error) {
-        console.error("删除聊天失���:", error);
+        console.error("删除聊天失:", error);
         toast.current?.show({
           severity: "error",
           summary: "错误",
@@ -634,10 +641,7 @@ export default function Home() {
         visible={showAuth}
         onHide={() => setShowAuth(false)}
         content={() => (
-          <AuthForm 
-            toast={toast}
-            onSuccess={() => setShowAuth(false)}
-          />
+          <AuthForm toast={toast} onSuccess={() => setShowAuth(false)} />
         )}
       />
       <Splitter className="h-full w-full">
@@ -672,7 +676,9 @@ export default function Home() {
                 <Button
                   icon="pi pi-sign-out"
                   className="self-center"
-                  onClick={() => signOut({ callbackUrl: window.location.origin })}
+                  onClick={() =>
+                    signOut({ callbackUrl: window.location.origin })
+                  }
                   tooltip="退出登录"
                 />
               </div>

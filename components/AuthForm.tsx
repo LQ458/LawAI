@@ -47,14 +47,14 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
           password,
           email,
         });
-        
+
         toast.current?.show({
-          severity: "success", 
+          severity: "success",
           summary: "注册成功",
           detail: "请登录",
           life: 3000,
         });
-        
+
         setUsername("");
         setPassword("");
         setEmail("");
@@ -76,13 +76,13 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
   const handleGoogleLogin = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     try {
       const result = await signIn("google", {
         callbackUrl: window.location.origin,
         redirect: true,
       });
-      
+
       if (result?.error) {
         toast.current?.show({
           severity: "error",
@@ -117,7 +117,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
         <h2 className="text-center text-primary font-bold text-3xl mb-6">
           {isLogin ? "登录" : "注册"}
         </h2>
-        
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <span className="p-float-label">
             <InputText
@@ -129,11 +129,11 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
             />
             <label htmlFor="username">用户名</label>
           </span>
-          
+
           <span className="p-float-label">
             <InputText
               id="password"
-              type="password" 
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full"
@@ -141,7 +141,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
             />
             <label htmlFor="password">密码</label>
           </span>
-          
+
           {!isLogin && (
             <span className="p-float-label">
               <InputText
@@ -163,7 +163,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
             raised
             className="w-full"
           />
-          
+
           <Button
             label="使用Google账号登录"
             icon="pi pi-google"
@@ -172,7 +172,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
             outlined
             className="w-full"
           />
-          
+
           <Button
             label={isLogin ? "没有账号?注册" : "已有账号?登录"}
             onClick={switchMode}
@@ -185,4 +185,4 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
   );
 };
 
-export default AuthForm; 
+export default AuthForm;

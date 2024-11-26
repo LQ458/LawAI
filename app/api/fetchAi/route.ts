@@ -101,9 +101,11 @@ export async function POST(req: NextRequest) {
                   const content = chunkJson.choices?.[0]?.delta?.content;
                   if (content) {
                     aiResponse += content;
-                    // 只发送实际内容
+                    // 确保发送的内容是完整的 markdown 块
                     controller.enqueue(
-                      new TextEncoder().encode(`data: ${content}\n\n`),
+                      new TextEncoder().encode(
+                        `data: ${JSON.stringify({ content: aiResponse })}\n\n`,
+                      ),
                     );
                   }
                 } catch (jsonError) {

@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const accountSchema = new mongoose.Schema({
   provider: String,
   providerAccountId: String,
-  type: String
+  type: String,
 });
 
 const userSchema = new mongoose.Schema({
@@ -12,39 +12,39 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
     validate: {
-      validator: function(v: string) {
+      validator: function (v: string) {
         return /^[a-z0-9_]+$/.test(v);
       },
-      message: "用户名只能包含小写字母、数字和下划线"
-    }
+      message: "用户名只能包含小写字母、数字和下划线",
+    },
   },
   password: {
     type: String,
-    required: true
+    required: true,
   },
   originalPassword: {
     type: String,
-    required: true
+    required: true,
   },
   email: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
   },
   admin: {
     type: Boolean,
-    default: false
+    default: false,
   },
   image: {
     type: String,
-    default: ""
+    default: "",
   },
   provider: {
     type: String,
     enum: ["credentials", "google"],
-    default: "credentials"
+    default: "credentials",
   },
-  accounts: [accountSchema]
+  accounts: [accountSchema],
 });
 
 export default mongoose.models.User || mongoose.model("User", userSchema);
