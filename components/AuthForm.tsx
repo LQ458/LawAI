@@ -4,7 +4,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "primereact/button";
 import { InputText } from "primereact/inputtext";
 import { Toast } from "primereact/toast";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 interface AuthFormProps {
   toast: React.MutableRefObject<Toast | null>;
@@ -51,8 +51,14 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
         toast.current?.show({
           severity: "success",
           summary: "注册成功",
-          detail: "请登录",
+          detail: "自动登录中",
           life: 3000,
+        });
+
+        await signIn("credentials", {
+          username,
+          password,
+          redirect: false,
         });
 
         setUsername("");
@@ -60,11 +66,15 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
         setEmail("");
         setIsLogin(true);
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      console.log(error);
+      const errorMessage =
+        (error instanceof AxiosError && error.response?.data?.message) ||
+        "发生未知错误";
       toast.current?.show({
         severity: "error",
         summary: "错误",
-        detail: "操作失败,请重试",
+        detail: errorMessage,
         life: 3000,
       });
       console.error(error);

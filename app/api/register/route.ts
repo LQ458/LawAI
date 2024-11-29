@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
   try {
     const { username, password, email } = await req.json();
     if (!/^[^\W_]+$/.test(username)) {
-      return NextResponse.json({ error: "用户名不合法" }, { status: 400 });
+      return NextResponse.json({ message: "用户名不合法" }, { status: 400 });
     }
     if (password.length < 8) {
-      return NextResponse.json({ error: "密码长度至少8位" }, { status: 400 });
+      return NextResponse.json({ message: "密码长度至少8位" }, { status: 400 });
     }
     if (
       !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/.test(
@@ -37,12 +37,12 @@ export async function POST(req: NextRequest) {
       )
     ) {
       return NextResponse.json(
-        { error: "密码必须包含大小写字母、数字、特殊字符" },
+        { message: "密码必须包含大小写字母、数字、特殊字符" },
         { status: 400 },
       );
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ error: "邮箱不合法" }, { status: 400 });
+      return NextResponse.json({ message: "邮箱不合法" }, { status: 400 });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -60,6 +60,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "用户创建成功" }, { status: 201 });
   } catch (error) {
     console.error("创建用户失败:", error);
-    return NextResponse.json({ message: "用户名重复" }, { status: 500 });
+    return NextResponse.json({ message: "用户名或邮箱重复" }, { status: 500 });
   }
 }

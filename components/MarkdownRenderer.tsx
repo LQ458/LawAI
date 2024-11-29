@@ -54,7 +54,6 @@ function tryWrapHtmlCode(text: string) {
 
 const RenderedContent = (props: { content: string }) => {
   const escapedContent = useMemo(() => {
-    console.log(tryWrapHtmlCode(escapeBrackets(props.content)));
     return tryWrapHtmlCode(escapeBrackets(props.content));
   }, [props.content]);
 

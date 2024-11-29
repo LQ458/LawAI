@@ -4,10 +4,13 @@ const DynamicMarkdownRenderer = dynamic(
   async () => await import("./MarkdownRenderer"),
   {
     loading: () => (
-      <i
-        className="pi pi-spin pi-spinner text-gray-400 font-thin"
-        style={{ fontSize: "3rem" }}
-      ></i>
+      <div className="flex justify-center items-center p-4">
+        <i
+          className="pi pi-spin pi-spinner text-purple-400"
+          style={{ fontSize: "1.5rem" }}
+        ></i>
+        <span className="ml-2 text-gray-500">加载中...</span>
+      </div>
     ),
   },
 );

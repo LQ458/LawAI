@@ -1,8 +1,10 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import DynamicMarkdownRenderer from "./DynamicMarkdown";
 import { Avatar } from "primereact/avatar";
 import { MessageRole } from "@/types";
+import { CopyToClipboard } from "react-copy-to-clipboard";
+import { Button } from "primereact/button";
 
 interface ChatComponentProps {
   role: MessageRole;
@@ -15,6 +17,13 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   message,
   isTemporary = false,
 }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div
       className={`flex ${
@@ -37,7 +46,20 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         } ${isTemporary ? "opacity-50" : ""}`}
       >
         {role === "assistant" ? (
-          <DynamicMarkdownRenderer content={message} />
+          <>
+            <DynamicMarkdownRenderer content={message} />
+            <div className="mt-2 flex justify-end">
+              <CopyToClipboard text={message} onCopy={handleCopy}>
+                <Button
+                  severity="secondary"
+                  text
+                  size="small"
+                  icon={copied ? "pi pi-check" : "pi pi-copy"}
+                  label={copied ? "已复制" : "复制"}
+                />
+              </CopyToClipboard>
+            </div>
+          </>
         ) : (
           <p className="whitespace-pre-wrap">{message}</p>
         )}

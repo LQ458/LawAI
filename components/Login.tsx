@@ -25,7 +25,6 @@ const Login: React.FC<LoginProps> = ({ hide, toast }) => {
         password,
         redirect: false,
       });
-      console.log(username, password);
       if (res && res.error) {
         toast.current?.show({
           severity: "error",

@@ -14,6 +14,7 @@ import { Chat, MessageRole } from "@/types";
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
 import AuthForm from "../components/AuthForm";
+import { useRouter } from "next/navigation";
 
 // 在组件外部定义一个不可变的时间和消息数量显示组件
 const StaticInfo = memo(({ time, count }: { time: string; count: number }) => (
@@ -24,6 +25,7 @@ const StaticInfo = memo(({ time, count }: { time: string; count: number }) => (
 StaticInfo.displayName = "StaticInfo";
 
 export default function Home() {
+  const router = useRouter();
   const [chatLists, setChatLists] = useState<Chat[]>([]); // 聊天列表
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null); // 当前选中的聊天
   const [initChat, setInitChat] = useState(false); // 是否初始化聊天
@@ -577,7 +579,7 @@ export default function Home() {
   // 添加一个 useEffect 来处理初始滚动
   useEffect(() => {
     if (selectedChat?._id) {
-      // 使用 setTimeout 确保在 DOM 更新后执行滚动
+      // 使用 setTimeout 确保在 DOM 更新后执滚动
       setTimeout(() => {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
@@ -658,6 +660,12 @@ export default function Home() {
               </div>
               <div className="flex gap-2 self-center">
                 <Button
+                  icon="pi pi-chart-line"
+                  className="self-center"
+                  onClick={() => router.push("/summary")}
+                  tooltip="总结"
+                />
+                <Button
                   icon="pi pi-sync"
                   className="self-center"
                   onClick={fetchChats}
@@ -712,7 +720,7 @@ export default function Home() {
                     {selectedChat?.messages?.length || 0}条对话
                   </p>
                 </div>
-                <div className="flex gap-3 self-center mr-3">
+                {/* <div className="flex gap-3 self-center mr-3">
                   <Button
                     icon="pi pi-refresh"
                     rounded
@@ -734,7 +742,7 @@ export default function Home() {
                     severity="secondary"
                     aria-label="Edit"
                   />
-                </div>
+                </div> */}
               </div>
               <Divider />
             </div>
