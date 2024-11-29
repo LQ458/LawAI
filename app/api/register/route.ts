@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email !== "") {
       return NextResponse.json({ message: "邮箱不合法" }, { status: 400 });
     }
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       username,
       originalPassword: oripw,
       password: hashedPassword,
-      email,
+      email: email ?? "",
       admin: false,
     });
 

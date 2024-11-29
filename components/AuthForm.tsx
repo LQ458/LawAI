@@ -45,7 +45,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
         await axios.post("/api/register", {
           username,
           password,
-          email,
+          email: email ?? "",
         });
 
         toast.current?.show({
@@ -54,6 +54,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
           detail: "自动登录中",
           life: 3000,
         });
+        localStorage.setItem("showTour", "true");
 
         await signIn("credentials", {
           username,
@@ -160,7 +161,6 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full"
-                required
               />
               <label htmlFor="email">邮箱</label>
             </span>
