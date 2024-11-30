@@ -15,9 +15,11 @@ import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
 import AuthForm from "../components/AuthForm";
 import { useRouter } from "next/navigation";
-import { driver } from "driver.js";
-import "driver.js/dist/driver.css";
-
+import { DriveStep } from "driver.js";
+import UseTour from "@/hooks/useTour";
+import SetAuth from "@/hooks/setAuth";
+import UseObChatList from "@/hooks/useObChatList";
+import UseInitInfo from "@/hooks/useInitInfo";
 // 在组件外部定义一个不可变的时间和消息数量显示组件
 const StaticInfo = memo(({ time, count }: { time: string; count: number }) => (
   <p className="text-sm text-gray-500">
@@ -25,6 +27,45 @@ const StaticInfo = memo(({ time, count }: { time: string; count: number }) => (
   </p>
 ));
 StaticInfo.displayName = "StaticInfo";
+
+const steps: DriveStep[] = [
+  {
+    element: '[data-tour="new-chat"]',
+    popover: {
+      title: "新建对话",
+      description: "点击这里创建新的对话",
+      side: "bottom",
+      align: "start",
+    },
+  },
+  {
+    element: '[data-tour="chat-list"]',
+    popover: {
+      title: "对话列表",
+      description: "这里显示您的所有对话记录",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: '[data-tour="chat-input"]',
+    popover: {
+      title: "输入框",
+      description: "在这里输入您的问题，按Enter发送",
+      side: "top",
+      align: "start",
+    },
+  },
+  {
+    element: '[data-tour="summary"]',
+    popover: {
+      title: "数据统计",
+      description: "查看您的对话统计和总结",
+      side: "bottom",
+      align: "start",
+    },
+  },
+];
 
 export default function Home() {
   const router = useRouter();
@@ -49,142 +90,8 @@ export default function Home() {
 
   const [showAuth, setShowAuth] = useState(true);
 
-  // 定义 tour 步骤
-  const driverObj = useRef(
-    driver({
-      showProgress: true,
-      steps: [
-        {
-          element: '[data-tour="summary"]',
-          popover: {
-            title: "AI总结功能跳转",
-            description: "点击这里跳转AI总结文本界面",
-            side: "bottom",
-            align: "start",
-          },
-        },
-        {
-          element: '[data-tour="refresh-list"]',
-          popover: {
-            title: "刷新对话列表",
-            description: "点击这里刷新对话列表",
-            side: "bottom",
-            align: "start",
-          },
-        },
-        {
-          element: '[data-tour="new-chat"]',
-          popover: {
-            title: "新建对话",
-            description: "点击这里创建新的对话",
-            side: "bottom",
-            align: "start",
-          },
-        },
-        {
-          element: '[data-tour="logout"]',
-          popover: {
-            title: "退出登录",
-            description: "点击这里退出登录",
-            side: "bottom",
-            align: "start",
-          },
-        },
-        {
-          element: '[data-tour="chat-list"]',
-          popover: {
-            title: "对话列表",
-            description: "这里显示您的所有对话记录",
-            side: "right",
-            align: "start",
-          },
-        },
-        {
-          element: '[data-tour="chat-input"]',
-          popover: {
-            title: "输入框",
-            description: "在这里输入您的问题，按Enter发送，Shift+Enter换行",
-            side: "top",
-            align: "start",
-          },
-        },
-      ],
-      nextBtnText: "下一步",
-      prevBtnText: "上一步",
-      doneBtnText: "完成",
-      showButtons: ["next", "previous", "close"],
-    }),
-  );
-
-  // 将 driver 对象的创建移到 useEffect 中
-  useEffect(() => {
-    driverObj.current = driver({
-      showProgress: true,
-      steps: [
-        {
-          element: '[data-tour="new-chat"]',
-          popover: {
-            title: "新建对话",
-            description: "点击这里创建新的对话",
-            side: "bottom",
-            align: "start",
-          },
-        },
-        {
-          element: '[data-tour="chat-list"]',
-          popover: {
-            title: "对话列表",
-            description: "这里显示您的所有对话记录",
-            side: "right",
-            align: "start",
-          },
-        },
-        {
-          element: '[data-tour="chat-input"]',
-          popover: {
-            title: "输入框",
-            description: "在这里输入您的问题，按Enter发送",
-            side: "top",
-            align: "start",
-          },
-        },
-        {
-          element: '[data-tour="summary"]',
-          popover: {
-            title: "数据统计",
-            description: "查看您的对话统计和总结",
-            side: "bottom",
-            align: "start",
-          },
-        },
-      ],
-      nextBtnText: "下一步",
-      prevBtnText: "上一步",
-      doneBtnText: "完成",
-      showButtons: ["next", "previous", "close"],
-    });
-  }, []); // 空依赖数组确保只初始化一次
-
-  // 检查是否是新注册用户并启动 tour
-  useEffect(() => {
-    // 检查 localStorage 中的标志
-    const showTour = localStorage.getItem("showTour") === "true";
-
-    if (showTour && status === "authenticated") {
-      // 增加延迟时间，确保 DOM 完全加载
-      setTimeout(() => {
-        console.log("Starting tour...");
-        try {
-          driverObj.current.drive();
-          // 清除标志
-          localStorage.removeItem("showTour");
-        } catch (error) {
-          console.error("Tour error:", error);
-        }
-      }, 2000);
-    }
-  }, [status]); // 只依赖于认证状态
-
+  UseTour(steps, status); // 添加用户引导
+  SetAuth(status, setShowAuth); // 设置用户认证状态
   // 修改 ChatCard 组件
   const ChatCard = memo(
     ({
@@ -243,14 +150,6 @@ export default function Home() {
       },
     }));
   }, []);
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      setShowAuth(true);
-    } else if (status === "authenticated") {
-      setShowAuth(false);
-    }
-  }, [status]); // 处理未登录状态
 
   // 修改获取聊天列表的函数
   const fetchChats = useCallback(async () => {
@@ -698,21 +597,13 @@ export default function Home() {
   });
 
   // 添加监听聊天列表变化的 effect
-  useEffect(() => {
-    if (chatLists.length === 0 && session?.user?.name) {
-      const newChat = {
-        _id: "",
-        title: "新的聊天",
-        userId: session.user.name,
-        time: getCurrentTimeInLocalTimeZone(),
-        messages: [],
-      };
-      setChatLists([newChat]);
-      setSelectedChat(newChat);
-    } else if (chatLists.length > 0 && !selectedChat) {
-      setSelectedChat(chatLists[0]);
-    }
-  }, [chatLists, selectedChat, session?.user?.name]);
+  UseObChatList(
+    chatLists,
+    setChatLists,
+    selectedChat!,
+    setSelectedChat,
+    session!,
+  );
 
   // 添加一个 useEffect 来处理初始滚动
   useEffect(() => {
@@ -765,13 +656,7 @@ export default function Home() {
   );
 
   // 初始化显示信息
-  useEffect(() => {
-    chatLists.forEach((chat) => {
-      if (!chatInfo[chat._id || "new"]) {
-        updateChatInfo(chat);
-      }
-    });
-  }, [chatLists, updateChatInfo]);
+  UseInitInfo(chatLists, updateChatInfo, chatInfo);
 
   return (
     <div className="flex h-screen w-screen relative">
