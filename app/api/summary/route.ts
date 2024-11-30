@@ -9,8 +9,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Text to summarize is required" });
   }
 
-  const AK = "vpDCmt5NExqfH0kMUyV5UG4p";
-  const SK = "ZjqhhKJ6gcFA9nq0KpwEUWmuOQ6VshiB";
+  const AK = process.env.BAIDU_AK;
+  const SK = process.env.BAIDU_SK;
 
   try {
     // Request access token
