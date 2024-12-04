@@ -17,7 +17,6 @@ import AuthForm from "../components/AuthForm";
 import { useRouter } from "next/navigation";
 import { DriveStep } from "driver.js";
 import UseTour from "@/hooks/useTour";
-import SetAuth from "@/hooks/setAuth";
 import UseObChatList from "@/hooks/useObChatList";
 import UseInitInfo from "@/hooks/useInitInfo";
 // 在组件外部定义一个不可变的时间和消息数量显示组件
@@ -88,10 +87,8 @@ export default function Home() {
     Record<string, { time: string; count: number }>
   >({});
 
-  const [showAuth, setShowAuth] = useState(true);
-
   UseTour(steps, status); // 添加用户引导
-  SetAuth(status, setShowAuth); // 设置用户认证状态
+
   // 修改 ChatCard 组件
   const ChatCard = memo(
     ({
@@ -658,15 +655,47 @@ export default function Home() {
   // 初始化显示信息
   UseInitInfo(chatLists, updateChatInfo, chatInfo);
 
+  // 添加网络状态监听
+  useEffect(() => {
+    const handleOffline = () => {
+      toast.current?.show({
+        severity: "error",
+        summary: "网络连接断开",
+        detail: "请检查网络连接",
+        life: 3000,
+      });
+    };
+
+    const handleOnline = () => {
+      toast.current?.show({
+        severity: "success",
+        summary: "网络已连接",
+        detail: "网络连接已恢复",
+        life: 3000,
+      });
+    };
+
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, []);
+
   return (
     <div className="flex h-screen w-screen relative">
       <Toast ref={toast} />
       <ConfirmDialog />
       <Dialog
-        visible={showAuth}
-        onHide={() => setShowAuth(false)}
+        visible={status === "unauthenticated"}
+        onHide={() => {}} // 移除 hide 处理,因为未认证状态下不应该允许关闭
         content={() => (
-          <AuthForm toast={toast} onSuccess={() => setShowAuth(false)} />
+          <AuthForm
+            toast={toast}
+            onSuccess={() => {}} // 不再需要手动关闭,因为 status 变化会自动关闭
+          />
         )}
       />
       <Splitter className="h-full w-full">

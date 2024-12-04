@@ -13,9 +13,9 @@ const userSchema = new mongoose.Schema({
     unique: true,
     validate: {
       validator: function (v: string) {
-        return /^[a-z0-9_]+$/.test(v);
+        return /^[a-zA-Z0-9_]+$/.test(v);
       },
-      message: "用户名只能包含小写字母、数字和下划线",
+      message: "用户名只能包含字母、数字和下划线",
     },
   },
   password: {

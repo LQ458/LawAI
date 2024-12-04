@@ -8,11 +8,11 @@ import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import GoogleProvider from "next-auth/providers/google";
 import clientPromise from "@/lib/mongodb-adapter";
 
-interface Account {
-  provider: string;
-  providerAccountId: string;
-  type: string;
-}
+// interface Account {
+//   provider: string;
+//   providerAccountId: string;
+//   type: string;
+// }
 
 const handler = NextAuth({
   session: {
@@ -32,9 +32,9 @@ const handler = NextAuth({
       allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
+          prompt: "select_account",
           access_type: "offline",
           response_type: "code",
-          prompt: "consent",
         },
       },
     }),
@@ -48,7 +48,7 @@ const handler = NextAuth({
         const username = credentials?.username || "";
         const user = await User.findOne({ username });
         if (!user) {
-          return null;
+          throw new Error("用户不存在");
         }
         const passwordCorrect = await bcrypt.compare(
           credentials?.password || "",
@@ -63,63 +63,19 @@ const handler = NextAuth({
           };
         }
 
-        return null;
+        throw new Error("密码错误");
       },
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ account }) {
       try {
         if (account?.provider === "google") {
-          await DBconnect();
-
-          const existingUser = await User.findOne({ email: user.email });
-
-          if (existingUser) {
-            if (
-              !existingUser.accounts ||
-              !existingUser.accounts.find(
-                (acc: Account) => acc.provider === "google",
-              )
-            ) {
-              existingUser.accounts = existingUser.accounts || [];
-              existingUser.accounts.push({
-                provider: "google",
-                providerAccountId: profile?.sub,
-                type: "oauth",
-              });
-              await existingUser.save();
-            }
-            return true;
-          } else {
-            const username = `${user.email?.split("@")[0]}_${Math.random().toString(36).slice(2, 6)}`;
-            const randomPassword =
-              Math.random().toString(36).slice(2) +
-              Math.random().toString(36).toUpperCase().slice(2);
-            const hashedPassword = await bcrypt.hash(randomPassword, 10);
-
-            await User.create({
-              username,
-              email: user.email,
-              password: hashedPassword,
-              originalPassword: hashedPassword,
-              provider: "google",
-              image: user.image || "",
-              admin: false,
-              accounts: [
-                {
-                  provider: "google",
-                  providerAccountId: profile?.sub,
-                  type: "oauth",
-                },
-              ],
-            });
-          }
           return true;
         }
         return true;
       } catch (error) {
-        console.error("Error in signIn callback:", error);
+        console.error("Google sign in error:", error);
         return false;
       }
     },
@@ -142,7 +98,7 @@ const handler = NextAuth({
         return session;
       } catch (error) {
         console.error("Error in session callback:", error);
-        return session;
+        throw new Error("会话处理失败，请稍后重试");
       }
     },
   },

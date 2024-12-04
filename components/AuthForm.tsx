@@ -88,28 +88,34 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
     e.preventDefault();
     e.stopPropagation();
 
+    setLoading(true);
+
     try {
       const result = await signIn("google", {
         callbackUrl: window.location.origin,
         redirect: true,
+        prompt: "select_account",
       });
 
       if (result?.error) {
+        console.error("Google login error:", result.error);
         toast.current?.show({
           severity: "error",
           summary: "登录失败",
-          detail: "Google登录失败，请重试",
-          life: 3000,
+          detail: "Google登录失败: " + (result.error || "请重试"),
+          life: 5000,
         });
       }
     } catch (error) {
       console.error("Google login error:", error);
       toast.current?.show({
         severity: "error",
-        summary: "错误",
-        detail: "登录过程中发生错误，请稍后重试",
-        life: 3000,
+        summary: "登录失败",
+        detail: "请检查网络连接后重试",
+        life: 5000,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
