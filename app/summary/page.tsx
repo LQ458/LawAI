@@ -4,7 +4,6 @@ import { Card } from "primereact/card";
 import { InputTextarea } from "primereact/inputtextarea";
 import { Panel } from "primereact/panel";
 import React, { useState } from "react";
-import { Divider } from "primereact/divider";
 import { Button } from "primereact/button";
 import { ProgressSpinner } from "primereact/progressspinner";
 import axios from "axios";
@@ -40,6 +39,7 @@ export default function Summary() {
         life: 3000,
       });
     } catch (error) {
+      console.error("Error copying to clipboard:", error);
       toast.current?.show({
         severity: "error",
         summary: "复制失败",
@@ -74,7 +74,6 @@ export default function Summary() {
                 icon="pi pi-send"
                 onClick={requestSummary}
                 className="w-full mt-auto"
-                severity="primary"
                 disabled={loading || !textToSummarize.trim()}
               />
             </div>
@@ -111,7 +110,7 @@ export default function Summary() {
               ) : (
                 <Card className="w-full shadow-md">
                   <p className="text-gray-500 text-center">
-                    还没有总结结果。请输入文本并点击"生成总结"。
+                    还没有总结结果。请输入文本并点击&quot;生成总结&quot;。
                   </p>
                 </Card>
               )}

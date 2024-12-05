@@ -1,18 +1,14 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Card } from "primereact/card";
-import { Button } from "primereact/button";
-import { Dropdown } from "primereact/dropdown";
+import { useRef } from "react";
 import { ScrollTop } from "primereact/scrolltop";
 import { Toast } from "primereact/toast";
 import { Skeleton } from "primereact/skeleton";
-import { Tag } from "primereact/tag";
 import { useSession } from "next-auth/react";
 import { useCases } from "@/hooks/useCases";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { CaseCard } from "@/components/CaseCard";
 import { CaseFilter } from "@/components/CaseFilter";
-import { Case, SortOption } from "@/types";
+import { Case } from "@/types";
 
 export default function Recommend() {
   const { data: session } = useSession();

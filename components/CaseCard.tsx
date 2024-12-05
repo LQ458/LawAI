@@ -56,6 +56,7 @@ export const CaseCard: FC<CaseCardProps> = ({
       setLikeCount((prev) => (liked ? prev + 1 : prev - 1));
       onLike();
     } catch (error) {
+      console.error("Error liking case:", error);
       toast.current?.show({
         severity: "error",
         summary: "操作失败",
@@ -92,6 +93,7 @@ export const CaseCard: FC<CaseCardProps> = ({
       setBookmarkCount((prev) => (bookmarked ? prev + 1 : prev - 1));
       onBookmark();
     } catch (error) {
+      console.error("Error bookmarking case:", error);
       toast.current?.show({
         severity: "error",
         summary: "操作失败",
