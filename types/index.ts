@@ -28,3 +28,17 @@ export interface ChatProps {
 export type MessageOptions = Message;
 
 // 如果需要额外的类型导出，可以在这里添加
+
+export interface Case {
+  id: string;
+  title: string;
+  summary: string;
+  tags: string[];
+  likes: number;
+  bookmarks: number;
+  createdAt: string;
+  isLiked?: boolean;
+  isBookmarked?: boolean;
+}
+
+export type SortOption = "latest" | "popular" | "mostLiked";
