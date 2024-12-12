@@ -1,0 +1,10 @@
+/* 添加 CSS 优化 hover 效果 */
+.remove-button {
+  transition: opacity 0.2s ease-in-out;
+  will-change: opacity;
+  opacity: 0;
+}
+
+.chat-item:hover .remove-button {
+  opacity: 1;
+}

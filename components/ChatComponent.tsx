@@ -1,23 +1,35 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DynamicMarkdownRenderer from "./DynamicMarkdown";
 import { Avatar } from "primereact/avatar";
-import { MessageRole } from "@/types";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Button } from "primereact/button";
 
 interface ChatComponentProps {
-  role: MessageRole;
+  role: string;
   message: string;
   isTemporary?: boolean;
+  onRender?: () => void;
 }
 
 const ChatComponent: React.FC<ChatComponentProps> = ({
   role,
   message,
   isTemporary = false,
+  onRender,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isRendered, setIsRendered] = useState(false);
+
+  useEffect(() => {
+    if (isRendered) {
+      onRender?.();
+    }
+  }, [isRendered, onRender]);
+
+  const handleMarkdownRender = () => {
+    setIsRendered(true);
+  };
 
   const handleCopy = () => {
     setCopied(true);
@@ -47,7 +59,10 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
       >
         {role === "assistant" ? (
           <>
-            <DynamicMarkdownRenderer content={message} />
+            <DynamicMarkdownRenderer
+              content={message}
+              onLoad={handleMarkdownRender}
+            />
             <div className="mt-2 flex justify-end">
               <CopyToClipboard text={message} onCopy={handleCopy}>
                 <Button

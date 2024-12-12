@@ -71,6 +71,12 @@ body {
 
 .chat-container {
   scroll-behavior: smooth;
+  overflow-anchor: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-container.scrolling {
+  scroll-behavior: auto;
 }
 
 .chat-container::-webkit-scrollbar {
@@ -79,11 +85,13 @@ body {
 
 .chat-container::-webkit-scrollbar-track {
   background: #f1f1f1;
+  border-radius: 4px;
 }
 
 .chat-container::-webkit-scrollbar-thumb {
   background: #888;
   border-radius: 4px;
+  border: 2px solid #f1f1f1;
 }
 
 .chat-container::-webkit-scrollbar-thumb:hover {
@@ -199,4 +207,31 @@ body {
 
 .copy-button:hover {
   background: #0056b3;
+}
+
+.scroll-anchor {
+  overflow-anchor: auto;
+  height: 1px;
+}
+
+/* 添加滚动指示器 */
+.scroll-indicator {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.scroll-indicator.visible {
+  opacity: 1;
 }

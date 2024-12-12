@@ -9,8 +9,7 @@ import { Toast } from "primereact/toast";
 import { useSession, signOut } from "next-auth/react";
 import { Dialog } from "primereact/dialog";
 import { InputTextarea } from "primereact/inputtextarea";
-import ScrollView from "@/components/ScrollView";
-import { Chat, MessageRole } from "@/types";
+import { Chat, Message, MessageRole } from "@/types";
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
 import AuthForm from "../components/AuthForm";
@@ -19,7 +18,8 @@ import { DriveStep } from "driver.js";
 import UseTour from "@/hooks/useTour";
 import UseObChatList from "@/hooks/useObChatList";
 import UseInitInfo from "@/hooks/useInitInfo";
-// 在组件外部定义一个不可变的时间和消息数量显示组件
+import { useScrollManager } from "@/hooks/useScrollManager";
+// 在组件外部定义一个不可变的时间和消息显示组件
 const StaticInfo = memo(({ time, count }: { time: string; count: number }) => (
   <p className="text-sm text-gray-500">
     {time} ({count} 条对话)
@@ -66,6 +66,11 @@ const steps: DriveStep[] = [
   },
 ];
 
+// 添加一个工具函数来计算实际对话数量
+const getActualMessageCount = (messages: Message[] = []) => {
+  return messages.filter((msg) => msg.role !== "system").length;
+};
+
 export default function Home() {
   const router = useRouter();
   const [chatLists, setChatLists] = useState<Chat[]>([]); // 聊天列表
@@ -73,8 +78,8 @@ export default function Home() {
   const [initChat, setInitChat] = useState(false); // 是否初始化聊天
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true); // 添加自动滚动状态
   const [tempMessage] = useState(""); // 添加临时消息状态
+  const isInitialScrollRef = useRef(true); // 是否为初始滚动
 
   const toast = useRef<Toast>(null);
   const chatRef = useRef<HTMLFormElement>(null);
@@ -86,6 +91,47 @@ export default function Home() {
   const [chatInfo, setChatInfo] = useState<
     Record<string, { time: string; count: number }>
   >({});
+
+  // 添加新的状态来跟踪 Markdown 渲染
+  const [markdownRendered, setMarkdownRendered] = useState(false);
+
+  // 使用滚动管理器
+  const { containerRef, messageRenderIndex, handleScroll, scrollToBottom } =
+    useScrollManager({
+      threshold: 70, // 滚动阈值
+      smoothScroll: true, // 启用平滑滚动
+      debounceMs: 150, // 防抖延迟
+      markdownRendered, // Markdown 渲染状态
+      isAIGenerating: isSending, // AI 生成状态
+      isMobileScreen: false, // 移动设备检测
+      pageSize: 20, // 每页消息数
+      endRef: chatEndRef, // 滚动目标引用
+    });
+
+  /**
+   * 初始滚动
+   */
+  useEffect(() => {
+    if (isInitialScrollRef.current && markdownRendered) {
+      isInitialScrollRef.current = false;
+      scrollToBottom();
+    }
+    console.log(markdownRendered);
+  }, [markdownRendered]);
+
+  // 可见消息状态管理
+  const [visibleMessages, setVisibleMessages] = useState<Message[]>([]);
+
+  // 更新可见消息
+  useEffect(() => {
+    if (selectedChat?.messages) {
+      const endIndex = Math.min(
+        messageRenderIndex,
+        selectedChat.messages.length,
+      );
+      setVisibleMessages(selectedChat.messages.slice(0, endIndex));
+    }
+  }, [selectedChat?.messages, messageRenderIndex]);
 
   UseTour(steps, status); // 添加用户引导
 
@@ -136,9 +182,9 @@ export default function Home() {
 
   ChatCard.displayName = "ChatCard";
 
-  // 在 AI 请求开始时更新显示信息
+  // 修改 updateChatInfo 函数
   const updateChatInfo = useCallback((chat: Chat) => {
-    const count = chat.messages.length;
+    const count = getActualMessageCount(chat.messages);
     setChatInfo((prev) => ({
       ...prev,
       [chat._id || "new"]: {
@@ -199,14 +245,6 @@ export default function Home() {
       });
     }
   }, [session?.user?.name, updateChatInfo]); // 移除 selectedChat 依赖
-
-  // 处理动
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const { scrollTop } = e.currentTarget;
-    setAutoScroll(
-      e.currentTarget.scrollHeight - scrollTop === e.currentTarget.clientHeight,
-    );
-  }, []);
 
   // 修改创建新聊天的函数
   const createNewChat = useCallback(() => {
@@ -289,7 +327,7 @@ export default function Home() {
               : currentMessage;
         }
 
-        // 创建初始聊天对象
+        // 创建初始聊天象
         const initialChat = {
           ...selectedChat,
           title: newTitle,
@@ -365,7 +403,10 @@ export default function Home() {
                       timestamp: new Date(),
                     });
                   }
-                  return { ...prevChat, messages };
+                  const updatedChat = { ...prevChat, messages };
+                  // 使用新的计算方式更新显示信息
+                  updateChatInfo(updatedChat);
+                  return updatedChat;
                 });
 
                 // 更新聊天列表 - 确保使用相同的条件
@@ -392,10 +433,6 @@ export default function Home() {
                     return chat;
                   }),
                 );
-
-                if (autoScroll) {
-                  chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-                }
               } catch (error) {
                 console.error("Error parsing chunk:", error);
               }
@@ -483,14 +520,14 @@ export default function Home() {
         toast.current?.show({
           severity: "error",
           summary: "错误",
-          detail: "网络连接异常，请检查网络后重试",
+          detail: "网络连接常，请检查网络后重试",
           life: 3000,
         });
       } finally {
         setIsSending(false);
       }
     },
-    [message, selectedChat, session?.user?.name, autoScroll, updateChatInfo],
+    [message, selectedChat, session?.user?.name, updateChatInfo],
   );
 
   // 处理请求错误
@@ -562,7 +599,7 @@ export default function Home() {
           detail: "聊天已删除",
         });
       } catch (error) {
-        console.error("删除聊天失:", error);
+        console.error("删除聊天失败:", error);
         toast.current?.show({
           severity: "error",
           summary: "错误",
@@ -577,7 +614,7 @@ export default function Home() {
   const confirmDelete = useCallback(
     (chatId: string) => {
       confirmDialog({
-        message: "确定要删除这个聊天吗？",
+        message: "确定删除这个聊天吗？",
         header: "删除确认",
         icon: "pi pi-exclamation-triangle",
         acceptLabel: "确定",
@@ -588,11 +625,6 @@ export default function Home() {
     [deleteChat],
   );
 
-  ScrollView({
-    data: selectedChat,
-    ref: chatEndRef,
-  });
-
   // 添加监听聊天列表变化的 effect
   UseObChatList(
     chatLists,
@@ -602,41 +634,29 @@ export default function Home() {
     session!,
   );
 
-  // 添加一个 useEffect 来处理初始滚动
+  // 优化 selectedChat 监听
   useEffect(() => {
-    if (selectedChat?._id) {
-      // 使用 setTimeout 确保在 DOM 更新后执滚动
-      setTimeout(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
-    }
-  }, [selectedChat?._id]); // 当选中的聊天改变时触发
+    if (!selectedChat) return;
 
-  // 修改监听 selectedChat 的变化的 effect
-  useEffect(() => {
-    if (selectedChat) {
+    const updateChatList = () => {
       setChatLists((prevLists) => {
-        // 对于已有ID的聊天，只更新不添加
-        if (selectedChat._id) {
-          return prevLists.map((chat) =>
-            chat._id === selectedChat._id ? selectedChat : chat,
-          );
-        }
-
-        // 对于新聊天，检查是否已存在相同时间戳的聊天
-        const existingNewChat = prevLists.find(
-          (chat) => !chat._id && chat.time === selectedChat.time,
+        // 使用 Map 优化查找
+        const chatMap = new Map(
+          prevLists.map((chat) => [chat._id || chat.time, chat]),
         );
 
-        if (existingNewChat) {
-          return prevLists.map((chat) =>
-            !chat._id && chat.time === selectedChat.time ? selectedChat : chat,
-          );
+        if (selectedChat._id) {
+          chatMap.set(selectedChat._id, selectedChat);
+        } else if (!chatMap.has(selectedChat.time)) {
+          chatMap.set(selectedChat.time, selectedChat);
         }
 
-        return prevLists;
+        return Array.from(chatMap.values());
       });
-    }
+    };
+
+    // 使用 requestIdleCallback 延迟更新
+    window.requestIdleCallback(() => updateChatList(), { timeout: 2000 });
   }, [selectedChat]);
 
   // 处理键盘事件
@@ -689,7 +709,7 @@ export default function Home() {
       <Toast ref={toast} />
       <ConfirmDialog />
       <Dialog
-        visible={status === "unauthenticated"}
+        visible={status === "unauthenticated" || status === "loading"}
         onHide={() => {}} // 移除 hide 处理,因为未认证状态下不应该允许关闭
         content={() => (
           <AuthForm
@@ -776,7 +796,10 @@ export default function Home() {
                 <div className="self-center">
                   <h1 className="text-2xl">{selectedChat?.title}</h1>
                   <p className="m-0">
-                    {selectedChat?.messages?.length || 0}条对话
+                    {selectedChat?.messages
+                      ? getActualMessageCount(selectedChat.messages)
+                      : 0}
+                    条对话
                   </p>
                 </div>
                 {/* <div className="flex gap-3 self-center mr-3">
@@ -807,17 +830,20 @@ export default function Home() {
             </div>
 
             <div
+              ref={containerRef}
               className="flex flex-col h-[58.3%] overflow-auto chat-container"
               onScroll={handleScroll}
             >
-              {/* 显示已保存的消息 */}
-              {selectedChat?.messages?.map((msg, index) => (
-                <ChatComponent
-                  key={index}
-                  role={msg.role}
-                  message={msg.content}
-                />
-              ))}
+              {visibleMessages
+                ?.filter((msg) => msg.role !== "system")
+                .map((message, index) => (
+                  <ChatComponent
+                    key={index + message.timestamp.toString()}
+                    role={message.role}
+                    message={message.content}
+                    onRender={() => setMarkdownRendered(true)}
+                  />
+                ))}
 
               {/* 显示临时消息 */}
               {tempMessage && (
@@ -827,8 +853,6 @@ export default function Home() {
                   isTemporary={true}
                 />
               )}
-
-              <div ref={chatEndRef} />
             </div>
             <form
               ref={chatRef}

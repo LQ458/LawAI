@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import RemarkMath from "remark-math";
 import RemarkGfm from "remark-gfm";
@@ -15,6 +15,7 @@ interface MarkdownProps {
   loading?: boolean;
   fontSize?: number;
   fontFamily?: string;
+  onLoad?: () => void;
 }
 
 function escapeBrackets(text: string) {
@@ -100,13 +101,12 @@ const RenderedContent = (props: { content: string }) => {
 };
 
 // 主组件
-const MarkdownRenderer: React.FC<MarkdownProps> = (props: {
-  content: string;
-  loading?: boolean;
-  fontSize?: number | 16;
-  fontFamily?: string | "inherit";
-}) => {
+const MarkdownRenderer: React.FC<MarkdownProps> = (props) => {
   const mdRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    props.onLoad?.();
+  }, [props.onLoad]);
 
   return (
     <div
