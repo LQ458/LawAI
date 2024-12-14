@@ -42,8 +42,7 @@ def extract_case_details(soup):
             "sub_industry": case.find('span', class_='case-sub-industry').text.strip() if case.find('span', class_='case-sub-industry') else "",
             "action_type": case.find('span', class_='case-action-type').text.strip() if case.find('span', class_='case-action-type') else "",
             "worker_grievances": case.find('span', class_='case-grievances').text.strip() if case.find('span', class_='case-grievances') else "",
-            "number_of_participants": case.find('span', class_='case-participants').text.str
-            ip() if case.find('span', class_='case-participants') else "",
+            "number_of_participants": case.find('span', class_='case-participants').text.strip() if case.find('span', class_='case-participants') else "",
             "result": case.find('span', class_='case-result').text.strip() if case.find('span', class_='case-result') else "",
             "related_enterprises": case.find('span', class_='case-related-enterprises').text.strip() if case.find('span', class_='case-related-enterprises') else "",
             "company_ownership": case.find('span', class_='case-ownership').text.strip() if case.find('span', class_='case-ownership') else "",

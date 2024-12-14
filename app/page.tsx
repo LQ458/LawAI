@@ -19,6 +19,8 @@ import UseTour from "@/hooks/useTour";
 import UseObChatList from "@/hooks/useObChatList";
 import UseInitInfo from "@/hooks/useInitInfo";
 import { useScrollManager } from "@/hooks/useScrollManager";
+import ScrollBottomButton from "@/components/ScrollBottomButton";
+import { useInView } from "react-intersection-observer";
 // 在组件外部定义一个不可变的时间和消息显示组件
 const StaticInfo = memo(({ time, count }: { time: string; count: number }) => (
   <p className="text-sm text-gray-500">
@@ -96,42 +98,23 @@ export default function Home() {
   const [markdownRendered, setMarkdownRendered] = useState(false);
 
   // 使用滚动管理器
-  const { containerRef, messageRenderIndex, handleScroll, scrollToBottom } =
-    useScrollManager({
-      threshold: 70, // 滚动阈值
-      smoothScroll: true, // 启用平滑滚动
-      debounceMs: 150, // 防抖延迟
-      markdownRendered, // Markdown 渲染状态
-      isAIGenerating: isSending, // AI 生成状态
-      isMobileScreen: false, // 移动设备检测
-      pageSize: 20, // 每页消息数
-      endRef: chatEndRef, // 滚动目标引用
-    });
+  const { scrollToBottom } = useScrollManager({
+    smoothScroll: true,
+    debounceMs: 100,
+  });
+
+  // 添加状态
+  const [showScrollButton, setShowScrollButton] = useState(true);
 
   /**
    * 初始滚动
    */
   useEffect(() => {
-    if (isInitialScrollRef.current && markdownRendered) {
+    if (isInitialScrollRef.current && markdownRendered && chatEndRef.current) {
       isInitialScrollRef.current = false;
-      scrollToBottom();
+      scrollToBottom(chatEndRef.current);
     }
-    console.log(markdownRendered);
   }, [markdownRendered]);
-
-  // 可见消息状态管理
-  const [visibleMessages, setVisibleMessages] = useState<Message[]>([]);
-
-  // 更新可见消息
-  useEffect(() => {
-    if (selectedChat?.messages) {
-      const endIndex = Math.min(
-        messageRenderIndex,
-        selectedChat.messages.length,
-      );
-      setVisibleMessages(selectedChat.messages.slice(0, endIndex));
-    }
-  }, [selectedChat?.messages, messageRenderIndex]);
 
   UseTour(steps, status); // 添加用户引导
 
@@ -542,10 +525,9 @@ export default function Home() {
 
   // 初始化 effect
   useEffect(() => {
-    // 只在认证状态改变且已认证时初始化一次
+    // 只在认证状态改变且已认证初始化一次
     if (status === "authenticated" && !initChat) {
-      fetchChats();
-      setInitChat(true);
+      fetchChats().then(() => setInitChat(true));
     }
   }, [status, fetchChats, initChat]); // 移除其他不必要的依赖
 
@@ -634,30 +616,17 @@ export default function Home() {
     session!,
   );
 
-  // 优化 selectedChat 监听
+  //增加监听底部元素的effect
+  const { ref, inView } = useInView({
+    threshold: 1,
+    triggerOnce: false,
+  });
+
+  // 添加 IntersectionObserver
   useEffect(() => {
-    if (!selectedChat) return;
-
-    const updateChatList = () => {
-      setChatLists((prevLists) => {
-        // 使用 Map 优化查找
-        const chatMap = new Map(
-          prevLists.map((chat) => [chat._id || chat.time, chat]),
-        );
-
-        if (selectedChat._id) {
-          chatMap.set(selectedChat._id, selectedChat);
-        } else if (!chatMap.has(selectedChat.time)) {
-          chatMap.set(selectedChat.time, selectedChat);
-        }
-
-        return Array.from(chatMap.values());
-      });
-    };
-
-    // 使用 requestIdleCallback 延迟更新
-    window.requestIdleCallback(() => updateChatList(), { timeout: 2000 });
-  }, [selectedChat]);
+    setShowScrollButton(!inView);
+    console.log("trigger");
+  }, [inView]);
 
   // 处理键盘事件
   const handleKeyDown = useCallback(
@@ -709,7 +678,9 @@ export default function Home() {
       <Toast ref={toast} />
       <ConfirmDialog />
       <Dialog
-        visible={status === "unauthenticated" || status === "loading"}
+        visible={
+          status === "unauthenticated" || status === "loading" || !initChat
+        }
         onHide={() => {}} // 移除 hide 处理,因为未认证状态下不应该允许关闭
         content={() => (
           <AuthForm
@@ -785,12 +756,21 @@ export default function Home() {
           </div>
         </SplitterPanel>
         <SplitterPanel
-          className="flex flex-col h-full max-w-[80%]"
+          className="flex flex-col h-full max-w-[80%] relative"
           size={70}
           minSize={70}
           style={{ overflow: "auto" }}
         >
           <div className="w-full h-full">
+            <ScrollBottomButton
+              visible={showScrollButton}
+              onClick={() => {
+                if (chatEndRef.current) {
+                  scrollToBottom(chatEndRef.current);
+                  setShowScrollButton(false);
+                }
+              }}
+            />
             <div className="p-4 pb-0 pt-0 h-[16.7%] flex flex-col">
               <div className="flex flex-row justify-between">
                 <div className="self-center">
@@ -830,11 +810,10 @@ export default function Home() {
             </div>
 
             <div
-              ref={containerRef}
+              ref={chatEndRef}
               className="flex flex-col h-[58.3%] overflow-auto chat-container"
-              onScroll={handleScroll}
             >
-              {visibleMessages
+              {selectedChat?.messages
                 ?.filter((msg) => msg.role !== "system")
                 .map((message, index) => (
                   <ChatComponent
@@ -853,6 +832,9 @@ export default function Home() {
                   isTemporary={true}
                 />
               )}
+
+              {/* 添加底部观察元素 */}
+              <div ref={ref} className="p-[1px] w-full relative" />
             </div>
             <form
               ref={chatRef}
