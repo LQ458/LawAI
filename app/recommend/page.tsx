@@ -6,8 +6,8 @@ import { Skeleton } from "primereact/skeleton";
 import { useSession } from "next-auth/react";
 import { useCases } from "@/hooks/useCases";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { CaseCard } from "@/app/components/CaseCard";
-import { CaseFilter } from "@/app/components/CaseFilter";
+import { CaseCard } from "@/components/CaseCard";
+import { CaseFilter } from "@/components/CaseFilter";
 import { Case } from "@/types";
 
 export default function Recommend() {
