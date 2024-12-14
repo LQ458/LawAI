@@ -1,18 +1,17 @@
 "use client";
 import { Splitter, SplitterPanel } from "primereact/splitter";
-import { Card } from "primereact/card";
-import React, { useEffect, useState, useRef, useCallback, memo } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Divider } from "primereact/divider";
 import { Button } from "primereact/button";
 import ChatComponent from "@/components/ChatComponent";
 import { Toast } from "primereact/toast";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Dialog } from "primereact/dialog";
 import { InputTextarea } from "primereact/inputtextarea";
 import { Chat, Message, MessageRole } from "@/types";
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
-import AuthForm from "../components/AuthForm";
+import AuthForm from "@/components/AuthForm";
 import { useRouter } from "next/navigation";
 import { DriveStep } from "driver.js";
 import UseTour from "@/hooks/useTour";
@@ -21,13 +20,12 @@ import UseInitInfo from "@/hooks/useInitInfo";
 import { useScrollManager } from "@/hooks/useScrollManager";
 import ScrollBottomButton from "@/components/ScrollBottomButton";
 import { useInView } from "react-intersection-observer";
-// 在组件外部定义一个不可变的时间和消息显示组件
-const StaticInfo = memo(({ time, count }: { time: string; count: number }) => (
-  <p className="text-sm text-gray-500">
-    {time} ({count} 条对话)
-  </p>
-));
-StaticInfo.displayName = "StaticInfo";
+import ChatList from "@/components/ChatList";
+import ChatHeader from "@/components/ChatHeader";
+import { useChatState } from "../hooks/useChatState";
+import { useMessageState } from "../hooks/useMessageState";
+import { useAuth } from "@/hooks/useAuth";
+import { Skeleton } from "primereact/skeleton";
 
 const steps: DriveStep[] = [
   {
@@ -73,29 +71,64 @@ const getActualMessageCount = (messages: Message[] = []) => {
   return messages.filter((msg) => msg.role !== "system").length;
 };
 
+// 修改 LoadingMessage 组件
+const LoadingMessage = () => (
+  <div className="flex gap-3 px-4 py-2">
+    <Skeleton
+      shape="circle"
+      size="2rem"
+      className="flex-shrink-0 self-start mt-1"
+    />
+    <div className="flex-1 max-w-[85%]">
+      <div className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg">
+        <Skeleton className="w-full" height="1rem" />
+        <Skeleton className="w-[95%]" height="1rem" />
+        <Skeleton className="w-[90%]" height="1rem" />
+        <Skeleton className="w-[60%]" height="1rem" />
+      </div>
+      <div className="mt-1">
+        <Skeleton width="5rem" height="0.75rem" />
+      </div>
+    </div>
+  </div>
+);
+
 export default function Home() {
   const router = useRouter();
-  const [chatLists, setChatLists] = useState<Chat[]>([]); // 聊天列表
-  const [selectedChat, setSelectedChat] = useState<Chat | null>(null); // 当前选中的聊天
-  const [initChat, setInitChat] = useState(false); // 是否初始化聊天
-  const [message, setMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [tempMessage] = useState(""); // 添加临时消息状态
-  const isInitialScrollRef = useRef(true); // 是否为初始滚动
-
+  const { data: session } = useSession();
   const toast = useRef<Toast>(null);
+
+  // 使用抽离的状态管理hooks
+  const {
+    chatLists,
+    setChatLists,
+    selectedChat,
+    setSelectedChat,
+    chatInfo,
+    updateChatInfo,
+    createNewChat,
+    deleteChat,
+  } = useChatState({
+    username: session?.user?.name || "",
+  });
+
+  const {
+    message,
+    setMessage,
+    isSending,
+    setIsSending,
+    tempMessage,
+    markdownRendered,
+    setMarkdownRendered,
+    handleMessageChange,
+    handleKeyDown,
+  } = useMessageState();
+
+  const [initChat, setInitChat] = useState(false); // 是否初始化聊天
+  const [isInitialScrollRef, setIsInitialScrollRef] = useState(true); // 是否为初始滚动
+
   const chatRef = useRef<HTMLFormElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  const { data: session, status } = useSession();
-
-  // 添加一个状态来存储固定的显示信息
-  const [chatInfo, setChatInfo] = useState<
-    Record<string, { time: string; count: number }>
-  >({});
-
-  // 添加新的状态来跟踪 Markdown 渲染
-  const [markdownRendered, setMarkdownRendered] = useState(false);
 
   // 使用滚动管理器
   const { scrollToBottom } = useScrollManager({
@@ -103,79 +136,25 @@ export default function Home() {
     debounceMs: 100,
   });
 
+  useEffect(() => {}, [initChat]);
+
   // 添加状态
   const [showScrollButton, setShowScrollButton] = useState(true);
+
+  // 使用自定义hook管理认证状态
+  const { isAuthenticated, isLoading } = useAuth();
 
   /**
    * 初始滚动
    */
   useEffect(() => {
-    if (isInitialScrollRef.current && markdownRendered && chatEndRef.current) {
-      isInitialScrollRef.current = false;
+    if (isInitialScrollRef && markdownRendered && chatEndRef.current) {
+      setIsInitialScrollRef(false);
       scrollToBottom(chatEndRef.current);
     }
   }, [markdownRendered]);
 
-  UseTour(steps, status); // 添加用户引导
-
-  // 修改 ChatCard 组件
-  const ChatCard = memo(
-    ({
-      chat,
-      isSelected,
-      onSelect,
-      onDelete,
-    }: {
-      chat: Chat;
-      isSelected: boolean;
-      onSelect: (chat: Chat) => void;
-      onDelete: (chatId: string) => void;
-    }) => {
-      const info = chatInfo[chat._id || "new"];
-
-      return (
-        <Card
-          key={chat._id || chat.time}
-          title={
-            <div className="flex justify-between items-center">
-              <span>{chat.title}</span>
-              {chat._id && (
-                <Button
-                  icon="pi pi-trash"
-                  className="p-button-text p-button-rounded delete-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(chat._id);
-                  }}
-                  tooltip="删除聊天"
-                />
-              )}
-            </div>
-          }
-          className={`cursor-pointer rounded-xl border-2 borderTransparent shadow-none chatCard ${
-            isSelected ? "chatBorder" : ""
-          }`}
-          onClick={() => onSelect(chat)}
-        >
-          {info && <StaticInfo time={info.time} count={info.count} />}
-        </Card>
-      );
-    },
-  );
-
-  ChatCard.displayName = "ChatCard";
-
-  // 修改 updateChatInfo 函数
-  const updateChatInfo = useCallback((chat: Chat) => {
-    const count = getActualMessageCount(chat.messages);
-    setChatInfo((prev) => ({
-      ...prev,
-      [chat._id || "new"]: {
-        time: chat.time,
-        count: count,
-      },
-    }));
-  }, []);
+  UseTour(steps, isAuthenticated ? "authenticated" : "unauthenticated"); // 添加用户引导
 
   // 修改获取聊天列表的函数
   const fetchChats = useCallback(async () => {
@@ -229,60 +208,10 @@ export default function Home() {
     }
   }, [session?.user?.name, updateChatInfo]); // 移除 selectedChat 依赖
 
-  // 修改创建新聊天的函数
-  const createNewChat = useCallback(() => {
-    // 检查是否已经存在"新的聊天"
-    const existingNewChat = chatLists.find(
-      (chat: Chat) => chat.title === "新的聊天" && !chat._id,
-    );
-
-    if (existingNewChat) {
-      setSelectedChat(existingNewChat);
-      return;
-    }
-
-    // 创建新聊天
-    const newChat: Chat = {
-      _id: "",
-      title: "新的聊天",
-      userId: session?.user?.name || "",
-      time: getCurrentTimeInLocalTimeZone(),
-      messages: [],
-    };
-
-    setChatLists((prev) => [newChat, ...prev]);
-    setSelectedChat(newChat);
-  }, [chatLists, session?.user?.name]);
-
   // 处理聊天选择
   const handleChatSelect = useCallback((chat: Chat) => {
     setSelectedChat(chat);
   }, []);
-
-  // 处理消息输入
-  const handleMessageChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setMessage(e.target.value);
-    },
-    [],
-  );
-
-  // 添加更新标题的函数
-  const updateChatTitle = async (chatId: string, newTitle: string) => {
-    try {
-      const response = await fetch("/api/updateChatTitle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId, newTitle }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update chat title");
-      }
-    } catch (error) {
-      console.error("Error updating chat title:", error);
-    }
-  };
 
   // 修改 requestAi 函数
   const requestAi = useCallback(
@@ -456,8 +385,6 @@ export default function Home() {
                   : chat,
               ),
             );
-
-            updateChatTitle(sessionId, newTitle);
           }
         } else {
           // 现有聊天的更逻辑保持不变
@@ -513,85 +440,6 @@ export default function Home() {
     [message, selectedChat, session?.user?.name, updateChatInfo],
   );
 
-  // 处理请求错误
-  // const handleRequestError = useCallback((error: any) => {
-  //   console.error("Error:", error);
-  //   toast.current?.show({
-  //     severity: "error",
-  //     summary: "错误",
-  //     detail: "请求失败",
-  //   });
-  // }, []);
-
-  // 初始化 effect
-  useEffect(() => {
-    // 只在认证状态改变且已认证初始化一次
-    if (status === "authenticated" && !initChat) {
-      fetchChats().then(() => setInitChat(true));
-    }
-  }, [status, fetchChats, initChat]); // 移除其他不必要的依赖
-
-  // 认证状态 effect
-  useEffect(() => {
-    if (status === "authenticated") {
-      fetchChats();
-    }
-  }, [status, fetchChats]);
-
-  // 优化删除聊天的函数
-  const deleteChat = useCallback(
-    async (chatId: string) => {
-      try {
-        const response = await fetch(`/api/deleteChat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatId, username: session?.user?.name }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to delete chat");
-        }
-
-        // 更新状态
-        setChatLists((prev) => {
-          const updatedLists = prev.filter((chat) => chat._id !== chatId);
-
-          // 只有当删除后没有任何聊天时才添加新的空聊天
-          if (updatedLists.length === 0) {
-            const newChat = {
-              _id: "",
-              title: "新的聊天",
-              userId: session?.user?.name || "",
-              time: getCurrentTimeInLocalTimeZone(),
-              messages: [],
-            };
-            updatedLists.push(newChat);
-          }
-
-          if (selectedChat?._id === chatId) {
-            setSelectedChat(updatedLists[0]);
-          }
-
-          return updatedLists;
-        });
-
-        toast.current?.show({
-          severity: "success",
-          summary: "成功",
-          detail: "聊天已删除",
-        });
-      } catch (error) {
-        console.error("删除聊天失败:", error);
-        toast.current?.show({
-          severity: "error",
-          summary: "错误",
-          detail: "删除聊天失败",
-        });
-      }
-    },
-    [selectedChat, session?.user?.name],
-  );
-
   // 添加删除确认对话框
   const confirmDelete = useCallback(
     (chatId: string) => {
@@ -601,10 +449,18 @@ export default function Home() {
         icon: "pi pi-exclamation-triangle",
         acceptLabel: "确定",
         rejectLabel: "取消",
-        accept: () => deleteChat(chatId),
+        accept: () => {
+          deleteChat(chatId, session?.user?.name || "");
+          toast.current?.show({
+            severity: "success",
+            summary: "删除成功",
+            detail: "聊天已删除",
+            life: 3000,
+          });
+        },
       });
     },
-    [deleteChat],
+    [deleteChat, session?.user?.name],
   );
 
   // 添加监听聊天列表变化的 effect
@@ -618,28 +474,14 @@ export default function Home() {
 
   //增加监听底部元素的effect
   const { ref, inView } = useInView({
-    threshold: 1,
+    threshold: 0.5,
     triggerOnce: false,
   });
 
   // 添加 IntersectionObserver
   useEffect(() => {
     setShowScrollButton(!inView);
-    console.log("trigger");
   }, [inView]);
-
-  // 处理键盘事件
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        if (!isSending && message.trim()) {
-          requestAi(e as unknown as React.FormEvent);
-        }
-      }
-    },
-    [isSending, message, requestAi],
-  );
 
   // 初始化显示信息
   UseInitInfo(chatLists, updateChatInfo, chatInfo);
@@ -673,19 +515,26 @@ export default function Home() {
     };
   }, []);
 
+  // 添加 useEffect 来控制初始化
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      setInitChat(true);
+      fetchChats();
+    }
+  }, [isAuthenticated, isLoading]);
+
   return (
     <div className="flex h-screen w-screen relative">
       <Toast ref={toast} />
       <ConfirmDialog />
       <Dialog
-        visible={
-          status === "unauthenticated" || status === "loading" || !initChat
-        }
-        onHide={() => {}} // 移除 hide 处理,因为未认证状态下不应该允许关闭
+        visible={!isAuthenticated && !isLoading}
+        onHide={() => {}}
         content={() => (
           <AuthForm
             toast={toast}
-            onSuccess={() => {}} // 不再需要手动关闭,因为 status 变化会自动关闭
+            setInitChat={setInitChat}
+            onSuccess={() => fetchChats()}
           />
         )}
       />
@@ -696,63 +545,22 @@ export default function Home() {
           minSize={20}
         >
           <div className="flex flex-col w-full p-4 relative h-full overflow-hidden">
-            <div className="flex justify-between flex-row">
-              <div>
-                <h1 className="text-2xl">法律AI</h1>
-                <p>你的私人法律顾问。</p>
-              </div>
-              <div className="flex gap-2 self-center">
-                <Button
-                  icon="pi pi-chart-line"
-                  className="self-center"
-                  onClick={() => router.push("/summary")}
-                  tooltip="总结"
-                  data-tour="summary"
-                />
-                <Button
-                  icon="pi pi-sync"
-                  className="self-center"
-                  onClick={fetchChats}
-                  tooltip="刷新列表"
-                  data-tour="refresh-list"
-                  disabled={status !== "authenticated"}
-                />
-                <Button
-                  icon="pi pi-plus"
-                  className="self-center"
-                  onClick={createNewChat}
-                  tooltip="新建聊天"
-                  data-tour="new-chat"
-                  disabled={chatLists.some(
-                    (chat) => chat.title === "新的聊天" && !chat._id,
-                  )}
-                />
-                <Button
-                  icon="pi pi-sign-out"
-                  className="self-center"
-                  data-tour="logout"
-                  onClick={() =>
-                    signOut({ callbackUrl: window.location.origin })
-                  }
-                  tooltip="退出登录"
-                />
-              </div>
-            </div>
-            <Divider className="mb-10" />
-            <div
-              className="flex flex-col gap-4 overflow-auto scrollbar-thin scrollbar-thumb-rounded"
-              data-tour="chat-list"
-            >
-              {chatLists.map((chat) => (
-                <ChatCard
-                  key={chat._id || chat.time}
-                  chat={chat}
-                  isSelected={selectedChat?._id === chat._id}
-                  onSelect={handleChatSelect}
-                  onDelete={confirmDelete}
-                />
-              ))}
-            </div>
+            <ChatHeader
+              onNewChat={createNewChat}
+              onRefresh={fetchChats}
+              isAuthenticated={isAuthenticated}
+              disableNewChat={chatLists.some(
+                (chat) => chat.title === "新的聊天" && !chat._id,
+              )}
+              onSummary={() => router.push("/summary")}
+            />
+            <ChatList
+              chats={chatLists}
+              selectedChat={selectedChat}
+              onSelect={handleChatSelect}
+              onDelete={confirmDelete}
+              chatInfo={chatInfo}
+            />
           </div>
         </SplitterPanel>
         <SplitterPanel
@@ -813,26 +621,50 @@ export default function Home() {
               ref={chatEndRef}
               className="flex flex-col h-[58.3%] overflow-auto chat-container"
             >
-              {selectedChat?.messages
-                ?.filter((msg) => msg.role !== "system")
-                .map((message, index) => (
-                  <ChatComponent
-                    key={index + message.timestamp.toString()}
-                    role={message.role}
-                    message={message.content}
-                    onRender={() => setMarkdownRendered(true)}
-                  />
-                ))}
-
-              {/* 显示临时消息 */}
-              {tempMessage && (
-                <ChatComponent
-                  role="user"
-                  message={tempMessage}
-                  isTemporary={true}
-                />
+              {initChat ? (
+                <>
+                  {selectedChat?.messages
+                    ?.filter((msg) => msg.role !== "system")
+                    .map((message, index) => (
+                      <ChatComponent
+                        key={index + message.timestamp.toString()}
+                        role={message.role}
+                        message={message.content}
+                        onRender={() => setMarkdownRendered(true)}
+                      />
+                    ))}
+                  {tempMessage && (
+                    <ChatComponent
+                      role="user"
+                      message={tempMessage}
+                      isTemporary={true}
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col">
+                  <LoadingMessage />
+                  <LoadingMessage />
+                  <LoadingMessage />
+                  <div className="flex gap-3 px-4 py-2">
+                    <Skeleton
+                      shape="circle"
+                      size="2rem"
+                      className="flex-shrink-0 self-start mt-1"
+                    />
+                    <div className="flex-1 max-w-[85%]">
+                      <div className="flex items-center gap-2 p-3">
+                        <Skeleton
+                          width="8rem"
+                          height="1rem"
+                          className="animate-pulse"
+                        />
+                        <i className="pi pi-spin pi-spinner text-gray-400" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
-
               {/* 添加底部观察元素 */}
               <div ref={ref} className="p-[1px] w-full relative" />
             </div>
@@ -852,8 +684,8 @@ export default function Home() {
                 onChange={handleMessageChange}
                 className="w-full max-h-[600px] overflow-y-auto h-auto p-2 border border-gray-300 rounded-lg"
                 placeholder="Enter发送，Shift+Enter换行"
-                onKeyDown={handleKeyDown} // 确保件绑定正确
-                disabled={isSending}
+                onKeyDown={(e) => handleKeyDown(e, requestAi)} // 确保件绑定正确
+                disabled={isSending || !initChat}
               />
               <Divider layout="vertical" className="mx-3" />
               <Button
@@ -862,6 +694,7 @@ export default function Home() {
                 className="self-center h-1/4 p-button-primary min-w-28"
                 type="submit"
                 loading={isSending}
+                disabled={!initChat || isSending}
               />
             </form>
           </div>

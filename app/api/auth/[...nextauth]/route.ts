@@ -68,17 +68,31 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ account }) {
+    async signIn({ user, account }) {
       try {
-        if (account?.provider === "google") {
-          return true;
+        await DBconnect();
+
+        // 检查用户是否存在
+        const existingUser = await User.findOne({
+          $or: [{ email: user.email }, { username: user.name }],
+        });
+
+        if (!existingUser && account?.provider === "google") {
+          // 创建新用户
+          await User.create({
+            username: user.name,
+            email: user.email,
+            image: user.image,
+          });
         }
+
         return true;
       } catch (error) {
-        console.error("Google sign in error:", error);
-        return false;
+        console.error("Sign in error:", error);
+        throw new Error("登录失败,请稍后重试");
       }
     },
+
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token;
@@ -86,6 +100,7 @@ const handler = NextAuth({
       }
       return token;
     },
+
     async session({ session }) {
       try {
         if (session?.user?.email) {
@@ -97,11 +112,12 @@ const handler = NextAuth({
         }
         return session;
       } catch (error) {
-        console.error("Error in session callback:", error);
-        throw new Error("会话处理失败，请稍后重试");
+        console.error("Session error:", error);
+        throw new Error("会话处理失败");
       }
     },
   },
+
   events: {
     async signIn(message) {
       console.log("Successful sign in", message);
@@ -110,7 +126,6 @@ const handler = NextAuth({
       console.log("Successful sign out", message);
     },
   },
-  debug: process.env.NODE_ENV === "development",
 });
 
 export { handler as GET, handler as POST };

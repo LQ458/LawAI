@@ -1,23 +1,29 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { Button } from "primereact/button";
 import { InputText } from "primereact/inputtext";
 import { Toast } from "primereact/toast";
 import axios, { AxiosError } from "axios";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AuthFormProps {
   toast: React.MutableRefObject<Toast | null>;
   onSuccess: () => void;
+  setInitChat: (initChat: boolean) => void;
 }
 
-const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
+const AuthForm: React.FC<AuthFormProps> = ({
+  toast,
+  onSuccess,
+  setInitChat,
+}) => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-
+  const { isAuthenticated } = useAuth();
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -40,6 +46,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
           });
         } else {
           onSuccess();
+          setInitChat(true);
         }
       } else {
         await axios.post("/api/register", {
@@ -61,7 +68,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
           password,
           redirect: false,
         });
-
+        onSuccess();
+        setInitChat(true);
         setUsername("");
         setPassword("");
         setEmail("");
@@ -83,6 +91,13 @@ const AuthForm: React.FC<AuthFormProps> = ({ toast, onSuccess }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      onSuccess();
+      setInitChat(true);
+    }
+  }, [isAuthenticated, onSuccess, setInitChat]);
 
   const handleGoogleLogin = async (e: React.MouseEvent) => {
     e.preventDefault();
