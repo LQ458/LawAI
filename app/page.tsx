@@ -239,7 +239,7 @@ export default function Home() {
               : currentMessage;
         }
 
-        // 创建初始聊天象
+        // 创建初始聊天对象
         const initialChat = {
           ...selectedChat,
           title: newTitle,

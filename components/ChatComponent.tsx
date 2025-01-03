@@ -1,3 +1,6 @@
+// role = assistant 时，渲染markdown,即ai聊天返回内容部分
+// role = user 时，渲染纯文本（用户输入）
+
 "use client";
 import React, { useState, useEffect } from "react";
 import DynamicMarkdownRenderer from "./DynamicMarkdown";
@@ -59,10 +62,15 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
       >
         {role === "assistant" ? (
           <>
+            {/* 渲染markdown,即聊天返回内容部分 */}
             <DynamicMarkdownRenderer
               content={message}
               onLoad={handleMarkdownRender}
             />
+
+            {/* 在这里加入extractive ai的返回部分，可以参考dynamicMarkdownRenderer的渲染模式 */}
+
+            {/* 复制按钮 */}
             <div className="mt-2 flex justify-end">
               <CopyToClipboard text={message} onCopy={handleCopy}>
                 <Button
