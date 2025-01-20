@@ -71,7 +71,7 @@ const ChatList = memo(
   ({ chats, selectedChat, onSelect, onDelete, chatInfo }: ChatListProps) => {
     return (
       <div
-        className="flex flex-col gap-4 overflow-auto scrollbar-thin scrollbar-thumb-rounded"
+        className="flex flex-col gap-4 overflow-auto scrollbar-thin scrollbar-thumb-rounded pr-3"
         data-tour="chat-list"
       >
         {chats.map((chat) => (

@@ -1,6 +1,12 @@
 "use client";
 import { Splitter, SplitterPanel } from "primereact/splitter";
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+} from "react";
 import { Divider } from "primereact/divider";
 import { Button } from "primereact/button";
 import ChatComponent from "@/components/ChatComponent";
@@ -26,6 +32,8 @@ import { useChatState } from "../hooks/useChatState";
 import { useMessageState } from "../hooks/useMessageState";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "primereact/skeleton";
+import { Sidebar } from "primereact/sidebar";
+import { useSwipeable } from "react-swipeable";
 
 const steps: DriveStep[] = [
   {
@@ -93,6 +101,123 @@ const LoadingMessage = () => (
   </div>
 );
 
+// 优化响应式标题组件
+const ResponsiveTitle = () => {
+  const [titleRef, setTitleRef] = useState<HTMLDivElement | null>(null);
+  const [showFullTitle, setShowFullTitle] = useState(true);
+
+  useEffect(() => {
+    if (!titleRef) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0].contentRect.width;
+      setShowFullTitle(width >= 200); // 根据实际测试调整阈值
+    });
+
+    observer.observe(titleRef);
+    return () => observer.disconnect();
+  }, [titleRef]);
+
+  return (
+    <div
+      ref={setTitleRef}
+      className="flex flex-col items-center justify-center py-2 px-4"
+    >
+      <div className="relative flex items-center gap-2">
+        <h1 className="text-responsive font-bold text-gray-800 whitespace-nowrap">
+          法律AI
+        </h1>
+        {showFullTitle ? (
+          <span className="text-subtitle text-gray-600 whitespace-nowrap">
+            你的私人法律顾问
+          </span>
+        ) : (
+          <span
+            className="text-2xl cursor-help"
+            title="法律AI - 你的私人法律顾问"
+          >
+            ⚖️
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// 优化移动端布局组件
+const MobileLayout = ({
+  children,
+  sidebar,
+  showSidebar,
+  onToggleSidebar,
+}: {
+  children: React.ReactNode;
+  sidebar: React.ReactNode;
+  showSidebar: boolean;
+  onToggleSidebar: () => void;
+}) => {
+  const swipeHandlers = useSwipeable({
+    onSwipedRight: () => !showSidebar && onToggleSidebar(),
+    onSwipedLeft: () => showSidebar && onToggleSidebar(),
+    trackMouse: false,
+    delta: 50,
+  });
+
+  return (
+    <div
+      className="relative h-screen w-screen overflow-hidden"
+      {...swipeHandlers}
+    >
+      <Button
+        icon="pi pi-bars"
+        className="fixed top-3 left-3 z-50 bg-primary-10 hover:bg-primary-20 active:bg-primary-30"
+        onClick={onToggleSidebar}
+        aria-label="Toggle menu"
+        text
+      />
+
+      <Sidebar
+        visible={showSidebar}
+        onHide={onToggleSidebar}
+        className="custom-sidebar p-0 shadow-elevation-2 bg-cyan-50"
+        position="left"
+        showCloseIcon={false}
+        modal={true}
+        dismissable={true}
+      >
+        <div className="h-full overflow-hidden custom-scrollbar px-2">
+          <ResponsiveTitle />
+          {sidebar}
+        </div>
+      </Sidebar>
+
+      <div className="chat-mobile h-full custom-scrollbar">{children}</div>
+    </div>
+  );
+};
+
+// 创建一个自定义 hook 来处理响应式
+const useResponsive = () => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useLayoutEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 640);
+    };
+
+    // 初始检查
+    checkMobile();
+
+    // 添加resize监听
+    window.addEventListener("resize", checkMobile);
+
+    // 清理
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  return isMobile;
+};
+
 export default function Home() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -143,6 +268,9 @@ export default function Home() {
 
   // 使用自定义hook管理认证状态
   const { isAuthenticated, isLoading } = useAuth();
+
+  const [showSidebar, setShowSidebar] = useState(false);
+  const isMobile = useResponsive(); // 使用自定义hook
 
   /**
    * 初始滚动
@@ -523,8 +651,169 @@ export default function Home() {
     }
   }, [isAuthenticated, isLoading]);
 
+  // 侧边栏内容
+  const sidebarContent = (
+    <div className="flex flex-col w-full h-full p-4">
+      <ChatHeader
+        onNewChat={createNewChat}
+        onRefresh={fetchChats}
+        isAuthenticated={isAuthenticated}
+        disableNewChat={chatLists.some(
+          (chat) => chat.title === "新的聊天" && !chat._id,
+        )}
+        onSummary={() => router.push("/summary")}
+        isMobile={isMobile}
+      />
+      <ChatList
+        chats={chatLists}
+        selectedChat={selectedChat}
+        onSelect={(chat) => {
+          handleChatSelect(chat);
+          if (isMobile) setShowSidebar(false);
+        }}
+        onDelete={confirmDelete}
+        chatInfo={chatInfo}
+      />
+    </div>
+  );
+
+  // 主聊天区域内容
+  const chatContent = (
+    <div className="flex flex-col h-full">
+      <div className="w-full h-full">
+        <ScrollBottomButton
+          visible={showScrollButton}
+          onClick={() => {
+            if (chatEndRef.current) {
+              scrollToBottom(chatEndRef.current);
+              setShowScrollButton(false);
+            }
+          }}
+        />
+        <div className="p-4 pb-0 pt-0 h-[16.7%] flex flex-col">
+          <div className="flex flex-row justify-between">
+            <div className="self-center">
+              <h1 className="text-2xl">{selectedChat?.title}</h1>
+              <p className="m-0">
+                {selectedChat?.messages
+                  ? getActualMessageCount(selectedChat.messages)
+                  : 0}
+                条对话
+              </p>
+            </div>
+            {/* <div className="flex gap-3 self-center mr-3">
+              <Button
+                icon="pi pi-refresh"
+                rounded
+                outlined
+                severity="secondary"
+                aria-label="Refresh"
+              />
+              <Button
+                icon="pi pi-file-export"
+                rounded
+                outlined
+                severity="secondary"
+                aria-label="Export"
+              />
+              <Button
+                icon="pi pi-pencil"
+                rounded
+                outlined
+                severity="secondary"
+                aria-label="Edit"
+              />
+            </div> */}
+          </div>
+          <Divider />
+        </div>
+
+        <div
+          ref={chatEndRef}
+          className="flex flex-col h-[58.3%] overflow-auto chat-container"
+        >
+          {initChat ? (
+            <>
+              {selectedChat?.messages
+                ?.filter((msg) => msg.role !== "system")
+                .map((message, index) => (
+                  <ChatComponent
+                    key={index + message.timestamp.toString()}
+                    role={message.role}
+                    message={message.content}
+                    onRender={() => setMarkdownRendered(true)}
+                  />
+                ))}
+              {tempMessage && (
+                <ChatComponent
+                  role="user"
+                  message={tempMessage}
+                  isTemporary={true}
+                />
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col">
+              <LoadingMessage />
+              <LoadingMessage />
+              <LoadingMessage />
+              <div className="flex gap-3 px-4 py-2">
+                <Skeleton
+                  shape="circle"
+                  size="2rem"
+                  className="flex-shrink-0 self-start mt-1"
+                />
+                <div className="flex-1 max-w-[85%]">
+                  <div className="flex items-center gap-2 p-3">
+                    <Skeleton
+                      width="8rem"
+                      height="1rem"
+                      className="animate-pulse"
+                    />
+                    <i className="pi pi-spin pi-spinner text-gray-400" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* 添加底部观察元素 */}
+          <div ref={ref} className="p-[1px] w-full relative" />
+        </div>
+        <form
+          ref={chatRef}
+          onSubmit={(e) => {
+            e.preventDefault(); // 阻止表单的默认提交行为
+            requestAi(e);
+          }}
+          className="relative flex justify-center items-center h-1/4 p-4 border-gray-300 border-solid border-t-[1px] border-b-0 border-l-0 border-r-0 shadow-md"
+        >
+          <InputTextarea
+            data-tour="chat-input"
+            rows={5}
+            autoResize={true}
+            value={message}
+            onChange={handleMessageChange}
+            className="w-full max-h-[600px] overflow-y-auto h-auto p-2 border border-gray-300 rounded-lg"
+            placeholder="Enter发送，Shift+Enter换行"
+            onKeyDown={(e) => handleKeyDown(e, requestAi)} // 确保件绑定正确
+            disabled={isSending || !initChat}
+          />
+          <Divider layout="vertical" className="mx-3" />
+          <Button
+            label="发送"
+            icon="pi pi-send"
+            className="self-center h-1/4 p-button-primary min-w-28"
+            type="submit"
+            loading={isSending}
+            disabled={!initChat || isSending}
+          />
+        </form>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex h-screen w-screen relative">
+    <div className="chat-layout">
       <Toast ref={toast} />
       <ConfirmDialog />
       <Dialog
@@ -538,168 +827,32 @@ export default function Home() {
           />
         )}
       />
-      <Splitter className="h-full w-full">
-        <SplitterPanel
-          className="flex align-items-center justify-content-center bg-cyan-50"
-          size={30}
-          minSize={20}
+      {isMobile ? (
+        <MobileLayout
+          sidebar={sidebarContent}
+          showSidebar={showSidebar}
+          onToggleSidebar={() => setShowSidebar(!showSidebar)}
         >
-          <div className="flex flex-col w-full p-4 relative h-full overflow-hidden">
-            <ChatHeader
-              onNewChat={createNewChat}
-              onRefresh={fetchChats}
-              isAuthenticated={isAuthenticated}
-              disableNewChat={chatLists.some(
-                (chat) => chat.title === "新的聊天" && !chat._id,
-              )}
-              onSummary={() => router.push("/summary")}
-            />
-            <ChatList
-              chats={chatLists}
-              selectedChat={selectedChat}
-              onSelect={handleChatSelect}
-              onDelete={confirmDelete}
-              chatInfo={chatInfo}
-            />
-          </div>
-        </SplitterPanel>
-        <SplitterPanel
-          className="flex flex-col h-full max-w-[80%] relative"
-          size={70}
-          minSize={70}
-          style={{ overflow: "auto" }}
-        >
-          <div className="w-full h-full">
-            <ScrollBottomButton
-              visible={showScrollButton}
-              onClick={() => {
-                if (chatEndRef.current) {
-                  scrollToBottom(chatEndRef.current);
-                  setShowScrollButton(false);
-                }
-              }}
-            />
-            <div className="p-4 pb-0 pt-0 h-[16.7%] flex flex-col">
-              <div className="flex flex-row justify-between">
-                <div className="self-center">
-                  <h1 className="text-2xl">{selectedChat?.title}</h1>
-                  <p className="m-0">
-                    {selectedChat?.messages
-                      ? getActualMessageCount(selectedChat.messages)
-                      : 0}
-                    条对话
-                  </p>
-                </div>
-                {/* <div className="flex gap-3 self-center mr-3">
-                  <Button
-                    icon="pi pi-refresh"
-                    rounded
-                    outlined
-                    severity="secondary"
-                    aria-label="Refresh"
-                  />
-                  <Button
-                    icon="pi pi-file-export"
-                    rounded
-                    outlined
-                    severity="secondary"
-                    aria-label="Export"
-                  />
-                  <Button
-                    icon="pi pi-pencil"
-                    rounded
-                    outlined
-                    severity="secondary"
-                    aria-label="Edit"
-                  />
-                </div> */}
-              </div>
-              <Divider />
-            </div>
-
-            <div
-              ref={chatEndRef}
-              className="flex flex-col h-[58.3%] overflow-auto chat-container"
-            >
-              {initChat ? (
-                <>
-                  {selectedChat?.messages
-                    ?.filter((msg) => msg.role !== "system")
-                    .map((message, index) => (
-                      <ChatComponent
-                        key={index + message.timestamp.toString()}
-                        role={message.role}
-                        message={message.content}
-                        onRender={() => setMarkdownRendered(true)}
-                      />
-                    ))}
-                  {tempMessage && (
-                    <ChatComponent
-                      role="user"
-                      message={tempMessage}
-                      isTemporary={true}
-                    />
-                  )}
-                </>
-              ) : (
-                <div className="flex flex-col">
-                  <LoadingMessage />
-                  <LoadingMessage />
-                  <LoadingMessage />
-                  <div className="flex gap-3 px-4 py-2">
-                    <Skeleton
-                      shape="circle"
-                      size="2rem"
-                      className="flex-shrink-0 self-start mt-1"
-                    />
-                    <div className="flex-1 max-w-[85%]">
-                      <div className="flex items-center gap-2 p-3">
-                        <Skeleton
-                          width="8rem"
-                          height="1rem"
-                          className="animate-pulse"
-                        />
-                        <i className="pi pi-spin pi-spinner text-gray-400" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {/* 添加底部观察元素 */}
-              <div ref={ref} className="p-[1px] w-full relative" />
-            </div>
-            <form
-              ref={chatRef}
-              onSubmit={(e) => {
-                e.preventDefault(); // 阻止表单的默认提交行为
-                requestAi(e);
-              }}
-              className="relative flex justify-center items-center h-1/4 p-4 border-gray-300 border-solid border-t-[1px] border-b-0 border-l-0 border-r-0 shadow-md"
-            >
-              <InputTextarea
-                data-tour="chat-input"
-                rows={5}
-                autoResize={true}
-                value={message}
-                onChange={handleMessageChange}
-                className="w-full max-h-[600px] overflow-y-auto h-auto p-2 border border-gray-300 rounded-lg"
-                placeholder="Enter发送，Shift+Enter换行"
-                onKeyDown={(e) => handleKeyDown(e, requestAi)} // 确保件绑定正确
-                disabled={isSending || !initChat}
-              />
-              <Divider layout="vertical" className="mx-3" />
-              <Button
-                label="发送"
-                icon="pi pi-send"
-                className="self-center h-1/4 p-button-primary min-w-28"
-                type="submit"
-                loading={isSending}
-                disabled={!initChat || isSending}
-              />
-            </form>
-          </div>
-        </SplitterPanel>
-      </Splitter>
+          {chatContent}
+        </MobileLayout>
+      ) : (
+        <Splitter className="h-full w-full">
+          <SplitterPanel
+            className="bg-cyan-50 custom-scrollbar"
+            size={30}
+            minSize={20}
+          >
+            {sidebarContent}
+          </SplitterPanel>
+          <SplitterPanel
+            className="flex flex-col relative"
+            size={70}
+            minSize={70}
+          >
+            {chatContent}
+          </SplitterPanel>
+        </Splitter>
+      )}
     </div>
   );
 }

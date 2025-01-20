@@ -7,23 +7,26 @@ export async function GET(req: NextRequest) {
   try {
     await DBconnect();
 
-    const searchString = req.nextUrl.searchParams.get('search');
+    const searchString = req.nextUrl.searchParams.get("search");
     if (!searchString) {
-      return NextResponse.json({ error: 'Search string is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Search string is required" },
+        { status: 400 },
+      );
     }
 
     const cases = await Case.find({
       $or: [
-        { title: { $regex: searchString, $options: 'i' } },
-        { description: { $regex: searchString, $options: 'i' } },
-        { content: { $regex: searchString, $options: 'i' } }
-      ]
+        { title: { $regex: searchString, $options: "i" } },
+        { description: { $regex: searchString, $options: "i" } },
+        { content: { $regex: searchString, $options: "i" } },
+      ],
     }).limit(5);
 
-    const caseDetails = cases.map(c => ({
+    const caseDetails = cases.map((c) => ({
       title: c.title,
       description: c.description,
-      content: c.content
+      content: c.content,
     }));
 
     const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY! });
@@ -31,8 +34,11 @@ export async function GET(req: NextRequest) {
       model: process.env.AI_MODEL || "glm-4-flashx",
       messages: [
         { role: "system", content: "请根据以上信息回答问题" },
-        { role: "user", content: JSON.stringify({ searchString, caseDetails }) }
-      ]
+        {
+          role: "user",
+          content: JSON.stringify({ searchString, caseDetails }),
+        },
+      ],
     });
 
     return NextResponse.json({ data: aiResponse, cases: caseDetails });
