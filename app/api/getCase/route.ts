@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import DBconnect from "@/lib/mongodb";
-import CaseModel from "@/models/data"; // Import CaseModel from data.ts
+import { Case } from "@/models/case";
 import { ZhipuAI } from "zhipuai-sdk-nodejs-v4";
 
 export async function GET(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Search string is required' }, { status: 400 });
     }
 
-    const cases = await CaseModel.find({
+    const cases = await Case.find({
       $or: [
         { title: { $regex: searchString, $options: 'i' } },
         { description: { $regex: searchString, $options: 'i' } },
