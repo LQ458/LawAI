@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import DBconnect from "@/lib/mongodb";
-import { Case } from "@/models/case";
+import CaseModel from "@/models/data"; // Ensure you have a case model defined
 import { ZhipuAI } from "zhipuai-sdk-nodejs-v4";
-
+import nodejieba from "nodejieba";
 export async function GET(req: NextRequest) {
   try {
     await DBconnect();
@@ -14,19 +14,23 @@ export async function GET(req: NextRequest) {
         { status: 400 },
       );
     }
-
-    const cases = await Case.find({
+    console.log(keywords)
+    const keywords = nodejieba.cut(searchString, true);
+    // Build the $or query with regex for each keyword
+    const regexQueries = keywords.map((keyword) => ({
       $or: [
-        { title: { $regex: searchString, $options: "i" } },
-        { description: { $regex: searchString, $options: "i" } },
-        { content: { $regex: searchString, $options: "i" } },
+        { title: { $regex: keyword, $options: "i" } },
+        { description: { $regex: keyword, $options: "i" } },
+        { content: { $regex: keyword, $options: "i" } },
       ],
-    }).limit(5);
+    }));
 
+    const cases = await CaseModel.find({ $or: regexQueries }).limit(5);
+
+    // Map only title and link, excluding description from the response
     const caseDetails = cases.map((c) => ({
       title: c.title,
-      description: c.description,
-      content: c.content,
+      link: c.link, // Include only title and link in the response
     }));
 
     const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY! });

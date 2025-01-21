@@ -1,8 +1,6 @@
-// role = assistant 时，渲染markdown,即ai聊天返回内容部分
-// role = user 时，渲染纯文本（用户输入）
-
 "use client";
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import DynamicMarkdownRenderer from "./DynamicMarkdown";
 import { Avatar } from "primereact/avatar";
 import { CopyToClipboard } from "react-copy-to-clipboard";
@@ -23,12 +21,45 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [isRendered, setIsRendered] = useState(false);
+  const [caseDetails, setCaseDetails] = useState<any[]>([]);
+  const [showCaseDetails, setShowCaseDetails] = useState(false);
+  const [loading, setLoading] = useState(false); // Add loading state
 
   useEffect(() => {
     if (isRendered) {
       onRender?.();
+      if (role === "assistant") {
+        fetchCaseDetails();
+      }
     }
-  }, [isRendered, onRender]);
+  }, [isRendered, onRender, role]);
+  const fetchCaseDetails = async () => {
+    try {
+      setLoading(true); // Set loading to true when fetching starts
+      const response = await fetch(
+        `/api/getCase?search=${encodeURIComponent(message)}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch case details");
+      }
+
+      const res = await response.json();
+      const links = res.cases.map((caseDetail: any) => caseDetail.link);
+      console.log("Fetched case links:", links); // Print only the "link" content
+      setCaseDetails(res.cases);
+      setShowCaseDetails(true);
+    } catch (error) {
+      console.error("Error fetching case details:", error);
+    } finally {
+      setLoading(false); // Set loading to false when fetching ends
+    }
+  };
 
   const handleMarkdownRender = () => {
     setIsRendered(true);
@@ -40,60 +71,90 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   };
 
   return (
-    <div
-      className={`flex ${
-        role === "user" ? "justify-end" : "justify-start"
-      } items-start gap-2 p-4`}
-    >
-      {role === "assistant" && (
-        <Avatar
-          icon="pi pi-slack"
-          size="large"
-          shape="circle"
-          className="bg-purple-100 text-purple-600"
-        />
-      )}
+    <div className="flex flex-col items-start gap-2 p-4">
       <div
-        className={`max-w-[80%] rounded-lg p-4 ${
-          role === "user"
-            ? "bg-blue-500 text-white"
-            : "bg-gray-100 text-gray-800"
-        } ${isTemporary ? "opacity-50" : ""}`}
+        className={`flex ${
+          role === "user" ? "justify-end" : "justify-start"
+        } items-start gap-2`}
       >
-        {role === "assistant" ? (
-          <>
-            {/* 渲染markdown,即聊天返回内容部分 */}
-            <DynamicMarkdownRenderer
-              content={message}
-              onLoad={handleMarkdownRender}
-            />
+        {role === "assistant" && (
+          <Avatar
+            icon="pi pi-slack"
+            size="large"
+            shape="circle"
+            className="bg-purple-100 text-purple-600"
+          />
+        )}
+        <div
+          className={`max-w-[80%] rounded-lg p-4 ${
+            role === "user"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-800"
+          } ${isTemporary ? "opacity-50" : ""}`}
+        >
+          {role === "assistant" ? (
+            <>
+              {/* 渲染markdown,即聊天返回内容部分 */}
+              <DynamicMarkdownRenderer
+                content={message}
+                onLoad={handleMarkdownRender}
+              />
 
-            {/* 在这里加入extractive ai的返回部分，可以参考dynamicMarkdownRenderer的渲染模式 */}
-
-            {/* 复制按钮 */}
-            <div className="mt-2 flex justify-end">
-              <CopyToClipboard text={message} onCopy={handleCopy}>
-                <Button
-                  severity="secondary"
-                  text
-                  size="small"
-                  icon={copied ? "pi pi-check" : "pi pi-copy"}
-                  label={copied ? "已复制" : "复制"}
-                />
-              </CopyToClipboard>
-            </div>
-          </>
-        ) : (
-          <p className="whitespace-pre-wrap">{message}</p>
+              {/* 复制按钮 */}
+              <div className="mt-2 flex justify-end">
+                <CopyToClipboard text={message} onCopy={handleCopy}>
+                  <Button
+                    severity="secondary"
+                    text
+                    size="small"
+                    icon={copied ? "pi pi-check" : "pi pi-copy"}
+                    label={copied ? "已复制" : "复制"}
+                  />
+                </CopyToClipboard>
+              </div>
+            </>
+          ) : (
+            <p className="whitespace-pre-wrap">{message}</p>
+          )}
+        </div>
+        {role === "user" && (
+          <Avatar
+            icon="pi pi-user"
+            size="large"
+            shape="circle"
+            className="bg-blue-500 text-white"
+          />
         )}
       </div>
-      {role === "user" && (
-        <Avatar
-          icon="pi pi-user"
-          size="large"
-          shape="circle"
-          className="bg-blue-500 text-white"
-        />
+      {/* 在这里加入extractive ai的返回部分，可以参考dynamicMarkdownRenderer的渲染模式 */}
+      {loading ? (
+        <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full">
+          <h3 className="text-lg font-bold">Loading...</h3>
+        </div>
+      ) : (
+        showCaseDetails && (
+          <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full">
+            <h3 className="text-lg font-bold">相关案例:</h3>
+            {caseDetails.length > 0 ? (
+              <ul className="list-disc pl-5">
+                {caseDetails.map((caseDetail, index) => (
+                  <li key={index}>
+                    <a
+                      href={caseDetail.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 underline"
+                    >
+                      {caseDetail.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No matches are found in my database</p>
+            )}
+          </div>
+        )
       )}
     </div>
   );
