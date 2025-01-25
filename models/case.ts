@@ -71,5 +71,5 @@ caseSchema.index({ bookmarks: -1 });
 caseSchema.index({ tags: 1 });
 caseSchema.index({ userId: 1 });
 
-export const Case =
-  mongoose.models.Case || mongoose.model<ICase>("Case", caseSchema);
+export const Record =
+  mongoose.models.Record || mongoose.model<ICase>("Record", caseSchema);
