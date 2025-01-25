@@ -20,7 +20,8 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   isTemporary = false,
   onRender,
 }) => {
-  const [copied, setCopied] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState(false); // Add state for message copy
+  const [copiedAiMessage, setCopiedAiMessage] = useState(false); // Add state for AI message copy
   const [isRendered, setIsRendered] = useState(false);
   const [caseDetails, setCaseDetails] = useState<any[]>([]);
   const [showCaseDetails, setShowCaseDetails] = useState(false);
@@ -72,9 +73,14 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
     setIsRendered(true);
   };
 
-  const handleCopy = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyMessage = () => {
+    setCopiedMessage(true);
+    setTimeout(() => setCopiedMessage(false), 2000);
+  };
+
+  const handleCopyAiMessage = () => {
+    setCopiedAiMessage(true);
+    setTimeout(() => setCopiedAiMessage(false), 2000);
   };
 
   return (
@@ -109,13 +115,13 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
 
               {/* 复制按钮 */}
               <div className="mt-2 flex justify-end">
-                <CopyToClipboard text={message} onCopy={handleCopy}>
+                <CopyToClipboard text={message} onCopy={handleCopyMessage}>
                   <Button
                     severity="secondary"
                     text
                     size="small"
-                    icon={copied ? "pi pi-check" : "pi pi-copy"}
-                    label={copied ? "已复制" : "复制"}
+                    icon={copiedMessage ? "pi pi-check" : "pi pi-copy"}
+                    label={copiedMessage ? "已复制" : "复制"}
                   />
                 </CopyToClipboard>
               </div>
@@ -143,6 +149,17 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
           <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full">
             <h3 className="text-lg font-bold">AI Response:</h3>
             <p>{aiMessage}</p> {/* Display AI message */}
+            <div className="mt-2 flex justify-end">
+              <CopyToClipboard text={aiMessage} onCopy={handleCopyAiMessage}>
+                <Button
+                  severity="secondary"
+                  text
+                  size="small"
+                  icon={copiedAiMessage ? "pi pi-check" : "pi pi-copy"}
+                  label={copiedAiMessage ? "已复制" : "复制"}
+                />
+              </CopyToClipboard>
+            </div>
             <h3 className="text-lg font-bold">相关案例:</h3>
             {caseDetails.length > 0 ? (
               <ul className="list-disc pl-5">
