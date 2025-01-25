@@ -24,17 +24,16 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   const [caseDetails, setCaseDetails] = useState<any[]>([]);
   const [showCaseDetails, setShowCaseDetails] = useState(false);
   const [loading, setLoading] = useState(false); // Add loading state
-  const [aiData, setAiData] = useState<string>(""); // Add state for AI data
-  const [hasFetched, setHasFetched] = useState(false); // Add state to track if data has been fetched
+  const [aiMessage, setAiMessage] = useState<string>(""); // Add state for AI message
 
   useEffect(() => {
-    if (isRendered && !hasFetched) {
+    if (isRendered) {
       onRender?.();
       if (role === "assistant") {
         fetchCaseDetails();
       }
     }
-  }, [isRendered, onRender, role, hasFetched]);
+  }, [isRendered, onRender, role]);
 
   const fetchCaseDetails = async () => {
     try {
@@ -57,9 +56,8 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
       const links = res.cases.map((caseDetail: any) => caseDetail.link);
       console.log("Fetched case links:", links); // Print only the "link" content
       setCaseDetails(res.cases);
-      setAiData(res.output.choices[0].message.content); // Set AI data
+      setAiMessage(res.data); // Set AI message
       setShowCaseDetails(true);
-      setHasFetched(true); // Set hasFetched to true to prevent re-fetching
     } catch (error) {
       console.error("Error fetching case details:", error);
     } finally {
@@ -141,7 +139,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         showCaseDetails && (
           <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full">
             <h3 className="text-lg font-bold">AI Response:</h3>
-            <p>{aiData}</p> {/* Display AI data */}
+            <p>{aiMessage}</p> {/* Display AI message */}
             <h3 className="text-lg font-bold">相关案例:</h3>
             {caseDetails.length > 0 ? (
               <ul className="list-disc pl-5">
