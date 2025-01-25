@@ -5,6 +5,7 @@ import DynamicMarkdownRenderer from "./DynamicMarkdown";
 import { Avatar } from "primereact/avatar";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Button } from "primereact/button";
+import { ProgressSpinner } from 'primereact/progressspinner';
 
 interface ChatComponentProps {
   role: string;
@@ -25,15 +26,17 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   const [showCaseDetails, setShowCaseDetails] = useState(false);
   const [loading, setLoading] = useState(false); // Add loading state
   const [aiMessage, setAiMessage] = useState<string>(""); // Add state for AI message
+  const [hasFetched, setHasFetched] = useState(false); // Add state to track if fetching has been done
 
   useEffect(() => {
-    if (isRendered) {
+    if (isRendered && !hasFetched) {
       onRender?.();
       if (role === "assistant") {
         fetchCaseDetails();
+        setHasFetched(true); // Set hasFetched to true after fetching
       }
     }
-  }, [isRendered, onRender, role]);
+  }, [isRendered, onRender, role, hasFetched]);
 
   const fetchCaseDetails = async () => {
     try {
@@ -132,8 +135,8 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
       </div>
       {/* 在这里加入extractive ai的返回部分，可以参考dynamicMarkdownRenderer的渲染模式 */}
       {loading ? (
-        <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full">
-          <h3 className="text-lg font-bold">Loading...</h3>
+        <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full flex justify-center">
+          <ProgressSpinner />
         </div>
       ) : (
         showCaseDetails && (
