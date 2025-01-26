@@ -21,8 +21,8 @@ export async function GET(req: NextRequest) {
     }
 
     //const keywords = nodejieba.cut(searchString, true);
-    const keywords = searchString.split("");
     // Build the $or query with regex for each keyword
+    const keywords = searchString.split("");
     const regexQueries = keywords.map((keyword: string) => ({
       $or: [
         { title: { $regex: escapeRegExp(keyword), $options: "i" } },
@@ -38,13 +38,13 @@ export async function GET(req: NextRequest) {
       title: r.title,
       link: r.link, // Include only title and link in the response
     }));
-    const recordDetailsForAI = cases.map((c: { title: any; }) => ({
-      title: c.title, // Include only title for the AI message
+    const recordDetailsForAI = cases.map((c: { title: any; description: any; }) => ({
+      title: c.title,
+      description: c.description, // Include only title and description for the AI message
     }));
 
     const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY! });
-    const aiMessageContent = `以下是5个事例: ${recordDetailsForAI.map(detail => `标题: ${detail.title}`).join(';')}。这是用户的问题: "${searchString}"。请在100字内解释这五个事例是如何解答用户的问题的`;
-    console.log("aiMessageContent:" + aiMessageContent);
+    const aiMessageContent = `以下是5个事例: ${recordDetailsForAI.map(detail => `标题: ${detail.title}`).join(';')}。这是用户的问题: "${searchString}"。对于这五个例子，逐一在100字内解释这个事例是如何解答用户的问题的，记得换行`;    console.log("aiMessageContent:" + aiMessageContent);
     const aiResponse = await ai.createCompletions({
       model: process.env.AI_MODEL || "glm-4-flashx",
       messages: [

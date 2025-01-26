@@ -148,7 +148,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         showCaseDetails && (
           <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full">
             <h3 className="text-lg font-bold">AI Response:</h3>
-            <p>{aiMessage}</p> {/* Display AI message */}
+            <p dangerouslySetInnerHTML={{ __html: aiMessage.replace(/\n/g, '<br>') }}></p> {/* Display AI message */}
             <div className="mt-2 flex justify-end">
               <CopyToClipboard text={aiMessage} onCopy={handleCopyAiMessage}>
                 <Button
@@ -162,7 +162,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
             </div>
             <h3 className="text-lg font-bold">相关案例:</h3>
             {caseDetails.length > 0 ? (
-              <ul className="list-disc pl-5">
+              <ol className="list-decimal pl-5"> {/* Change to ordered list */}
                 {caseDetails.map((caseDetail, index) => (
                   <li key={index}>
                     <a
@@ -175,7 +175,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
                     </a>
                   </li>
                 ))}
-              </ul>
+              </ol>
             ) : (
               <p>No matches are found in my database</p>
             )}
