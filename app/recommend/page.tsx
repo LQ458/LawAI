@@ -8,6 +8,7 @@ import CaseCard from "@/components/CaseCard";
 import { IRecord } from "@/models/record";
 import { ProgressSpinner } from "primereact/progressspinner";
 import { Button } from "primereact/button";
+import { useRouter } from "next/navigation";
 
 export default function RecommendPage() {
   const { data: session, status } = useSession();
@@ -17,6 +18,7 @@ export default function RecommendPage() {
   const [error, setError] = useState("");
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
+  const router = useRouter();
 
   // 获取推荐列表
   const fetchRecommendations = async (pageNum = 1) => {
@@ -235,13 +237,33 @@ export default function RecommendPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">推荐案例</h1>
-          <Button
-            icon="pi pi-refresh"
-            className="p-button-text"
-            onClick={handleRefresh}
-            disabled={loading}
-          />
+          <div className="flex items-center space-x-4">
+            <Button
+              icon="pi pi-home"
+              tooltip="返回首页"
+              tooltipOptions={{ position: "bottom" }}
+              className="p-button-text"
+              onClick={() => router.push("/")}
+            />
+            <h1 className="text-2xl font-bold text-gray-800">推荐案例</h1>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Button
+              icon="pi pi-file-edit"
+              tooltip="案例总结"
+              tooltipOptions={{ position: "bottom" }}
+              className="p-button-text"
+              onClick={() => router.push("/summary")}
+            />
+            <Button
+              icon="pi pi-refresh"
+              tooltip="刷新"
+              tooltipOptions={{ position: "bottom" }}
+              className="p-button-text"
+              onClick={handleRefresh}
+              disabled={loading}
+            />
+          </div>
         </div>
       </header>
 

@@ -128,16 +128,20 @@ const ResponsiveTitle = () => {
           法律AI
         </h1>
         {showFullTitle ? (
-          <span className="text-subtitle text-gray-600 whitespace-nowrap">
-            你的私人法律顾问
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-subtitle text-gray-600 whitespace-nowrap">
+              你的私人法律顾问
+            </span>
+          </div>
         ) : (
-          <span
-            className="text-2xl cursor-help"
-            title="法律AI - 你的私人法律顾问"
-          >
-            ⚖️
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="text-2xl cursor-help"
+              title="法律AI - 你的私人法律顾问"
+            >
+              ⚖️
+            </span>
+          </div>
         )}
       </div>
     </div>
@@ -701,29 +705,6 @@ export default function Home() {
                 条对话
               </p>
             </div>
-            {/* <div className="flex gap-3 self-center mr-3">
-              <Button
-                icon="pi pi-refresh"
-                rounded
-                outlined
-                severity="secondary"
-                aria-label="Refresh"
-              />
-              <Button
-                icon="pi pi-file-export"
-                rounded
-                outlined
-                severity="secondary"
-                aria-label="Export"
-              />
-              <Button
-                icon="pi pi-pencil"
-                rounded
-                outlined
-                severity="secondary"
-                aria-label="Edit"
-              />
-            </div> */}
           </div>
           <Divider />
         </div>
@@ -847,7 +828,7 @@ export default function Home() {
           <SplitterPanel
             className="flex flex-col relative"
             size={70}
-            minSize={70}
+            minSize={60}
           >
             {chatContent}
           </SplitterPanel>
