@@ -5,7 +5,7 @@ import { ZhipuAI } from "zhipuai-sdk-nodejs-v4";
 
 // Function to escape special characters in a string for use in a regular expression
 function escapeRegExp(string: string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export async function GET(req: NextRequest) {
@@ -34,16 +34,16 @@ export async function GET(req: NextRequest) {
     const cases = await Record.find({ $or: regexQueries }).limit(5);
 
     // Map only title and link, excluding description from the response
-    const recordDetails = cases.map((r: { title: any; link: any; }) => ({
+    const recordDetails = cases.map((r: { title: any; link: any }) => ({
       title: r.title,
       link: r.link, // Include only title and link in the response
     }));
-    const recordDetailsForAI = cases.map((c: { title: any; }) => ({
+    const recordDetailsForAI = cases.map((c: { title: any }) => ({
       title: c.title, // Include only title for the AI message
     }));
 
     const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY! });
-    const aiMessageContent = `以下是5个事例: ${recordDetailsForAI.map(detail => `标题: ${detail.title}`).join(';')}。这是用户的问题: "${searchString}"。请在100字内解释这五个事例是如何解答用户的问题的`;
+    const aiMessageContent = `以下是5个事例: ${recordDetailsForAI.map((detail) => `标题: ${detail.title}`).join(";")}。这是用户的问题: "${searchString}"。请在100字内解释这五个事例是如何解答用户的问题的`;
     console.log("aiMessageContent:" + aiMessageContent);
     const aiResponse = await ai.createCompletions({
       model: process.env.AI_MODEL || "glm-4-flashx",
@@ -56,10 +56,14 @@ export async function GET(req: NextRequest) {
       ],
     });
     console.log("content:" + aiResponse.choices[0].message.content);
-    const aiMessage = aiResponse.choices?.[0]?.message?.content || "No response from AI";
+    const aiMessage =
+      aiResponse.choices?.[0]?.message?.content || "No response from AI";
     return NextResponse.json({ cases: recordDetails, data: aiMessage });
   } catch (error) {
     console.error("Error fetching cases:", error);
-    return NextResponse.json({ error: "Failed to fetch cases" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch cases" },
+      { status: 500 },
+    );
   }
 }

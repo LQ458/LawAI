@@ -8,32 +8,30 @@ export interface IRecord extends Document {
   content: string;
 }
 
-const recordSchema = new Schema<IRecord>(
-  {
-    title: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    link: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    description: {
-      type: String,
-      required: true,
-    },
-    date: {
-      type: String,
-      required: true,
-    },
-    content: {
-      type: String,
-      required: true,
-    },
+const recordSchema = new Schema<IRecord>({
+  title: {
+    type: String,
+    required: true,
+    trim: true,
   },
-);
+  link: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  description: {
+    type: String,
+    required: true,
+  },
+  date: {
+    type: String,
+    required: true,
+  },
+  content: {
+    type: String,
+    required: true,
+  },
+});
 
 // 添加索引以优化查询性能
 recordSchema.index({ title: "text", description: "text", content: "text" });

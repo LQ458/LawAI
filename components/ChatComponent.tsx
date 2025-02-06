@@ -5,7 +5,7 @@ import DynamicMarkdownRenderer from "./DynamicMarkdown";
 import { Avatar } from "primereact/avatar";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Button } from "primereact/button";
-import { ProgressSpinner } from 'primereact/progressspinner';
+import { ProgressSpinner } from "primereact/progressspinner";
 
 interface ChatComponentProps {
   role: string;
@@ -86,7 +86,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   return (
     <div className="flex flex-col items-start gap-2 p-4">
       <div
-        className={`flex ${
+        className={`flex w-full ${
           role === "user" ? "justify-end" : "justify-start"
         } items-start gap-2`}
       >
