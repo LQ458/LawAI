@@ -16,6 +16,7 @@ export interface IRecord extends Document {
   lastUpdateTime: Date;
   bookmarked?: boolean; // 是否被当前用户收藏
   _id: string; // MongoDB文档ID
+  recommendScore?: number; // 推荐指数
 }
 
 const recordSchema = new Schema<IRecord>({
