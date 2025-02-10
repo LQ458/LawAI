@@ -23,7 +23,21 @@ const AuthForm: React.FC<AuthFormProps> = ({
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isChina, setIsChina] = useState(false); // Add state to track if user is in China
   const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    // Detect user location using ipinfo
+    fetch(`https://ipinfo.io/?token=${process.env.NEXT_PUBLIC_IPINFO_TOKEN}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.country === 'CN') {
+          setIsChina(true);
+        }
+      })
+      .catch(error => console.error('Error fetching IP location:', error));
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -195,14 +209,16 @@ const AuthForm: React.FC<AuthFormProps> = ({
             className="w-full"
           />
 
-          <Button
-            label="使用Google账号登录"
-            icon="pi pi-google"
-            onClick={handleGoogleLogin}
-            severity="secondary"
-            outlined
-            className="w-full"
-          />
+          {!isChina && (
+            <Button
+              label="使用Google账号登录"
+              icon="pi pi-google"
+              onClick={handleGoogleLogin}
+              severity="secondary"
+              outlined
+              className="w-full"
+            />
+          )}
 
           <Button
             label={isLogin ? "没有账号?注册" : "已有账号?登录"}
