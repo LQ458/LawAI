@@ -2,7 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import DBconnect from "@/lib/mongodb";
-import { Case, Like, Bookmark } from "@/models/case";
+import { Case } from "@/models/case";
+import { Like } from "@/models/like";
+import { Bookmark } from "@/models/bookmark";
 import mongoose from "mongoose";
 const cookieName =
   process.env.NODE_ENV === "production"

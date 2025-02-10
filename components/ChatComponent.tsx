@@ -1,11 +1,10 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import DynamicMarkdownRenderer from "./DynamicMarkdown";
 import { Avatar } from "primereact/avatar";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Button } from "primereact/button";
-import { ProgressSpinner } from 'primereact/progressspinner';
+import { ProgressSpinner } from "primereact/progressspinner";
 
 interface ChatComponentProps {
   role: string;
@@ -23,6 +22,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   const [copiedMessage, setCopiedMessage] = useState(false); // Add state for message copy
   const [copiedAiMessage, setCopiedAiMessage] = useState(false); // Add state for AI message copy
   const [isRendered, setIsRendered] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [caseDetails, setCaseDetails] = useState<any[]>([]);
   const [showCaseDetails, setShowCaseDetails] = useState(false);
   const [loading, setLoading] = useState(false); // Add loading state
@@ -58,6 +58,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
 
       const res = await response.json();
       console.log("Response format:", res); // Print the format of the response
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const links = res.cases.map((caseDetail: any) => caseDetail.link);
       console.log("Fetched case links:", links); // Print only the "link" content
       setCaseDetails(res.cases);
@@ -91,7 +92,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   return (
     <div className="flex flex-col items-start gap-2 p-4">
       <div
-        className={`flex ${
+        className={`flex w-full ${
           role === "user" ? "justify-end" : "justify-start"
         } items-start gap-2`}
       >

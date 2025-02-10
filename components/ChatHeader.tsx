@@ -2,6 +2,7 @@ import { Button } from "primereact/button";
 import { Divider } from "primereact/divider";
 import { signOut } from "next-auth/react";
 import { memo, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface ChatHeaderProps {
   onNewChat: () => void;
@@ -23,13 +24,13 @@ const ChatHeader = memo(
   }: ChatHeaderProps) => {
     const [titleStyle, setTitleStyle] = useState<"full" | "hidden">("full");
     const containerRef = useRef<HTMLDivElement>(null);
-
+    const router = useRouter();
     useEffect(() => {
       if (!containerRef.current || isMobile) return;
 
       const observer = new ResizeObserver((entries) => {
         const width = entries[0].contentRect.width;
-        if (width >= 320) {
+        if (width >= 340) {
           setTitleStyle("full");
         } else {
           setTitleStyle("hidden");
@@ -63,15 +64,15 @@ const ChatHeader = memo(
           {!isMobile && renderTitle()}
           <div className="flex gap-2 self-center">
             <Button
-              icon="pi pi-chart-line"
-              className="self-center"
+              icon="pi pi-file-edit"
+              className="self-center size-[2.1rem]"
               onClick={onSummary}
               tooltip="总结"
               data-tour="summary"
             />
             <Button
               icon="pi pi-sync"
-              className="self-center"
+              className="self-center size-[2.1rem]"
               onClick={onRefresh}
               tooltip="刷新列表"
               data-tour="refresh-list"
@@ -79,7 +80,7 @@ const ChatHeader = memo(
             />
             <Button
               icon="pi pi-plus"
-              className="self-center"
+              className="self-center size-[2.1rem]"
               onClick={onNewChat}
               tooltip="新建聊天"
               data-tour="new-chat"
@@ -87,10 +88,16 @@ const ChatHeader = memo(
             />
             <Button
               icon="pi pi-sign-out"
-              className="self-center"
+              className="self-center size-[2.1rem]"
               data-tour="logout"
               onClick={() => signOut({ callbackUrl: window.location.origin })}
               tooltip="退出登录"
+            />
+            <Button
+              icon="pi pi-star-fill"
+              className="self-center size-[2.1rem]"
+              onClick={() => router.push("/recommend")}
+              tooltip="推荐案例"
             />
           </div>
         </div>
