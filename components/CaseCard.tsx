@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Card } from "primereact/card";
 import { Button } from "primereact/button";
-import { IRecord } from "@/models/record";
+import { IRecordWithUserState } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { Tooltip } from "primereact/tooltip";
 
 interface CaseCardProps {
-  record: IRecord;
+  record: IRecordWithUserState;
   onLike: () => void;
   onBookmark: () => void;
 }
@@ -36,13 +36,25 @@ export default function CaseCard({
     </div>
   );
 
+  const formatDate = (dateString: string | Date) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), {
+        addSuffix: true,
+        locale: zhCN,
+      });
+    } catch {
+      console.error("Invalid date:", dateString);
+      return "未知时间";
+    }
+  };
+
   const footer = (
     <div className="flex justify-between items-center pt-4">
       <div className="flex items-center space-x-4">
         <Button
-          icon={`pi ${record.likes > 0 ? "pi-heart-fill" : "pi-heart"}`}
+          icon={`pi ${record.isLiked ? "pi-heart-fill" : "pi-heart"}`}
           className={`p-button-rounded p-button-text ${
-            record.likes > 0
+            record.isLiked
               ? "text-red-500 hover:text-red-600"
               : "text-gray-500 hover:text-gray-600"
           }`}
@@ -51,14 +63,14 @@ export default function CaseCard({
           tooltipOptions={{ position: "top" }}
         />
         <Button
-          icon={`pi ${record.bookmarked ? "pi-bookmark-fill" : "pi-bookmark"}`}
+          icon={`pi ${record.isBookmarked ? "pi-bookmark-fill" : "pi-bookmark"}`}
           className={`p-button-rounded p-button-text ${
-            record.bookmarked
+            record.isBookmarked
               ? "text-blue-500 hover:text-blue-600"
               : "text-gray-500 hover:text-gray-600"
           }`}
           onClick={onBookmark}
-          tooltip={record.bookmarked ? "取消收藏" : "收藏"}
+          tooltip={record.isBookmarked ? "取消收藏" : "收藏"}
           tooltipOptions={{ position: "top" }}
         />
       </div>
@@ -67,10 +79,7 @@ export default function CaseCard({
         className="time-info text-sm text-gray-500 cursor-help"
         data-pr-tooltip={new Date(record.lastUpdateTime).toLocaleString()}
       >
-        {formatDistanceToNow(new Date(record.lastUpdateTime), {
-          addSuffix: true,
-          locale: zhCN,
-        })}
+        {formatDate(record.lastUpdateTime)}
       </div>
     </div>
   );

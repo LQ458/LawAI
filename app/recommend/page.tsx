@@ -5,7 +5,7 @@ import { Toast } from "primereact/toast";
 import { useSession } from "next-auth/react";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import CaseCard from "@/components/CaseCard";
-import { IRecord } from "@/models/record";
+import { IRecordWithUserState, RecommendationResponse } from "@/types";
 import { ProgressSpinner } from "primereact/progressspinner";
 import { Button } from "primereact/button";
 import { useRouter } from "next/navigation";
@@ -13,7 +13,9 @@ import { useRouter } from "next/navigation";
 export default function RecommendPage() {
   const { data: session, status } = useSession();
   const toast = useRef<Toast>(null);
-  const [recommendations, setRecommendations] = useState<IRecord[]>([]);
+  const [recommendations, setRecommendations] = useState<
+    IRecordWithUserState[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [hasMore, setHasMore] = useState(true);
@@ -31,10 +33,29 @@ export default function RecommendPage() {
       }
       const data = await response.json();
 
+      // 确保每个记录都有正确的用户状态字段
+      const processedRecommendations = data.recommendations.map(
+        (rec: RecommendationResponse) => ({
+          ...rec,
+          isLiked: rec.isLiked || false,
+          isBookmarked: rec.isBookmarked || false,
+          _id: rec.id || rec._id, // 确保_id字段存在
+          tags: rec.tags || [], // 确保tags字段存在
+          views: rec.views || 0,
+          likes: rec.likes || 0,
+          recommendScore: rec.recommendScore || 0,
+          description: rec.description || "",
+          lastUpdateTime: rec.lastUpdateTime || new Date(),
+          createdAt: rec.createdAt || new Date(),
+        }),
+      ) as IRecordWithUserState[];
+
+      console.log(data);
+
       if (pageNum === 1) {
-        setRecommendations(data.recommendations);
+        setRecommendations(processedRecommendations);
       } else {
-        setRecommendations((prev) => [...prev, ...data.recommendations]);
+        setRecommendations((prev) => [...prev, ...processedRecommendations]);
       }
 
       setHasMore(data.recommendations.length >= 20);
@@ -87,7 +108,8 @@ export default function RecommendPage() {
             return {
               ...rec,
               likes: data.liked ? rec.likes + 1 : rec.likes - 1,
-            } as IRecord;
+              isLiked: data.liked,
+            } as IRecordWithUserState;
           }
           return rec;
         }),
@@ -143,8 +165,8 @@ export default function RecommendPage() {
           if (rec._id === recordId) {
             return {
               ...rec,
-              bookmarked: data.bookmarked,
-            } as IRecord;
+              isBookmarked: data.bookmarked,
+            } as IRecordWithUserState;
           }
           return rec;
         }),
@@ -275,7 +297,7 @@ export default function RecommendPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recommendations.map((record: IRecord) => (
+            {recommendations.map((record: IRecordWithUserState) => (
               <CaseCard
                 key={record._id}
                 record={record}

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import DBconnect from "@/lib/mongodb";
-import { Case } from "@/models/case";
+import { Record } from "@/models/record";
 import { Like } from "@/models/like";
 import { Bookmark } from "@/models/bookmark";
 import mongoose from "mongoose";
@@ -11,6 +11,11 @@ const cookieName =
     ? "__Secure-next-auth.session-token"
     : "next-auth.session-token";
 
+/**
+ * 获取案例列表API
+ * 支持分页、排序、标签过滤
+ * 同时返回当前用户的点赞和收藏状态
+ */
 export async function POST(req: NextRequest) {
   try {
     const token = await getToken({
@@ -37,56 +42,68 @@ export async function POST(req: NextRequest) {
     let sortQuery = {};
     switch (sort) {
       case "latest":
-        sortQuery = { createdAt: -1 };
+        sortQuery = { lastUpdateTime: -1 };
         break;
       case "popular":
-        sortQuery = { bookmarks: -1, likes: -1 };
+        sortQuery = { interactionScore: -1 };
         break;
       case "mostLiked":
         sortQuery = { likes: -1 };
         break;
       default:
-        sortQuery = { createdAt: -1 };
+        sortQuery = { lastUpdateTime: -1 };
     }
 
     // 获取案例列表
-    const cases = await Case.find(query)
+    const records = await Record.find(query)
       .sort(sortQuery)
       .skip((page - 1) * pageSize)
       .limit(pageSize)
       .lean();
 
     // 如果用户已登录,获取点赞和收藏状态
-    if (token?.user) {
-      const userId = mongoose.Types.ObjectId.createFromHexString(
-        token.user.id as string,
-      );
-      const caseIds = cases.map((c) =>
-        mongoose.Types.ObjectId.createFromHexString(c._id as string),
-      );
+    if (token?.email) {
+      // 过滤并转换有效的ObjectId
+      const recordIds = records
+        .map((r) => r._id?.toString())
+        .filter((id): id is string => {
+          return id !== undefined && mongoose.Types.ObjectId.isValid(id);
+        })
+        .map((id) => new mongoose.Types.ObjectId(id));
 
-      const [likes, bookmarks] = await Promise.all([
-        Like.find({ userId, caseId: { $in: caseIds } }).lean(),
-        Bookmark.find({ userId, caseId: { $in: caseIds } }).lean(),
-      ]);
+      if (recordIds.length > 0) {
+        // 获取当前用户的点赞和收藏记录
+        const [likes, bookmarks] = await Promise.all([
+          Like.find({
+            userId: token.email,
+            recordId: { $in: recordIds },
+          }).lean(),
+          Bookmark.find({
+            userId: token.email,
+            recordId: { $in: recordIds },
+          }).lean(),
+        ]);
 
-      const likedCaseIds = new Set(likes.map((l) => l.caseId.toString()));
-      const bookmarkedCaseIds = new Set(
-        bookmarks.map((b) => b.caseId.toString()),
-      );
+        // 创建点赞和收藏记录的Set用于快速查找
+        const likedRecordIds = new Set(likes.map((l) => l.recordId.toString()));
+        const bookmarkedRecordIds = new Set(
+          bookmarks.map((b) => b.recordId.toString()),
+        );
 
-      cases.forEach((c: any) => {
-        c.isLiked = likedCaseIds.has(c._id.toString());
-        c.isBookmarked = bookmarkedCaseIds.has(c._id.toString());
-      });
+        // 为每条记录添加点赞和收藏状态
+        records.forEach((r: any) => {
+          const id = r._id?.toString();
+          if (id) {
+            r.isLiked = likedRecordIds.has(id);
+            r.isBookmarked = bookmarkedRecordIds.has(id);
+          }
+        });
+      }
     }
 
-    return NextResponse.json({ cases });
+    return NextResponse.json({ cases: records });
   } catch (error) {
     console.error("Error fetching cases:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch cases" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "获取案例列表失败" }, { status: 500 });
   }
 }

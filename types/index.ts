@@ -42,3 +42,37 @@ export interface Case {
 }
 
 export type SortOption = "latest" | "popular" | "mostLiked";
+
+export interface IRecord {
+  _id: string;
+  title: string;
+  description: string;
+  content: string;
+  tags: string[];
+  views: number;
+  likes: number;
+  recommendScore?: number;
+  lastUpdateTime: Date;
+  createdAt: Date;
+}
+
+export interface IRecordWithUserState extends IRecord {
+  isLiked: boolean;
+  isBookmarked: boolean;
+}
+
+export interface RecommendationResponse {
+  id?: string;
+  _id?: string;
+  title: string;
+  description: string;
+  content: string;
+  tags: string[];
+  views: number;
+  likes: number;
+  recommendScore?: number;
+  lastUpdateTime: Date;
+  createdAt: Date;
+  isLiked?: boolean;
+  isBookmarked?: boolean;
+}
