@@ -132,7 +132,9 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
                   severity="secondary"
                   text
                   size="small"
-                  icon={showAiResponse ? "pi pi-chevron-up" : "pi pi-chevron-down"}
+                  icon={
+                    showAiResponse ? "pi pi-chevron-up" : "pi pi-chevron-down"
+                  }
                   onClick={handleToggleAiResponse}
                   className="rainbow-text"
                 />
@@ -153,8 +155,8 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         )}
       </div>
       {/* 在这里加入extractive ai的返回部分，可以参考dynamicMarkdownRenderer的渲染模式 */}
-      {showAiResponse && (
-        loading ? (
+      {showAiResponse &&
+        (loading ? (
           <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full flex justify-center">
             <ProgressSpinner />
           </div>
@@ -197,8 +199,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
               )}
             </div>
           )
-        )
-      )}
+        ))}
     </div>
   );
 };
@@ -222,7 +223,7 @@ const styles = `
 export default ChatComponent;
 
 // Inject styles into the document head
-if (typeof document !== 'undefined') {
+if (typeof document !== "undefined") {
   const styleSheet = document.createElement("style");
   styleSheet.type = "text/css";
   styleSheet.innerText = styles;
