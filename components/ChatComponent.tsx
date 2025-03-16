@@ -22,7 +22,6 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   const [copiedMessage, setCopiedMessage] = useState(false); // Add state for message copy
   const [copiedAiMessage, setCopiedAiMessage] = useState(false); // Add state for AI message copy
   const [isRendered, setIsRendered] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [caseDetails, setCaseDetails] = useState<any[]>([]);
   const [showCaseDetails, setShowCaseDetails] = useState(false);
   const [loading, setLoading] = useState(false); // Add loading state
@@ -44,7 +43,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
     try {
       setLoading(true); // Set loading to true when fetching starts
       const response = await fetch(
-        `/api/getCase?search=${encodeURIComponent(message)}`,
+        `/api/chromadbtest?search=${encodeURIComponent(message)}`,
         {
           method: "GET",
           headers: {
@@ -58,7 +57,6 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
 
       const res = await response.json();
       console.log("Response format:", res); // Print the format of the response
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const links = res.cases.map((caseDetail: any) => caseDetail.link);
       console.log("Fetched case links:", links); // Print only the "link" content
       setCaseDetails(res.cases);
@@ -92,7 +90,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   return (
     <div className="flex flex-col items-start gap-2 p-4">
       <div
-        className={`flex w-full ${
+        className={`flex ${
           role === "user" ? "justify-end" : "justify-start"
         } items-start gap-2`}
       >
@@ -163,37 +161,39 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         ) : (
           showCaseDetails && (
             <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full">
-              <h3 className="text-lg font-bold">相关按例解读</h3>
-              <p dangerouslySetInnerHTML={{ __html: aiMessage.replace(/\n/g, '<br>') }}></p> {/* Display AI message */}
-              <div className="mt-2 flex justify-end">
-                <CopyToClipboard text={aiMessage} onCopy={handleCopyAiMessage}>
-                  <Button
-                    severity="secondary"
-                    text
-                    size="small"
-                    icon={copiedAiMessage ? "pi pi-check" : "pi pi-copy"}
-                    label={copiedAiMessage ? "已复制" : "复制"}
-                  />
-                </CopyToClipboard>
-              </div>
-              <h3 className="text-lg font-bold">相关案例:</h3>
               {caseDetails.length > 0 ? (
-                <ol className="list-decimal pl-5"> {/* Change to ordered list */}
-                  {caseDetails.map((caseDetail, index) => (
-                    <li key={index}>
-                      <a
-                        href={caseDetail.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 underline"
-                      >
-                        {caseDetail.title}
-                      </a>
-                    </li>
-                  ))}
-                </ol>
+                <>
+                  <h3 className="text-lg font-bold">相关案例解读</h3>
+                  <p dangerouslySetInnerHTML={{ __html: aiMessage.replace(/\n/g, '<br>') }}></p> {/* Display AI message */}
+                  <div className="mt-2 flex justify-end">
+                    <CopyToClipboard text={aiMessage} onCopy={handleCopyAiMessage}>
+                      <Button
+                        severity="secondary"
+                        text
+                        size="small"
+                        icon={copiedAiMessage ? "pi pi-check" : "pi pi-copy"}
+                        label={copiedAiMessage ? "已复制" : "复制"}
+                      />
+                    </CopyToClipboard>
+                  </div>
+                  <h3 className="text-lg font-bold">相关案例:</h3>
+                  <ol className="list-decimal pl-5">
+                    {caseDetails.map((caseDetail, index) => (
+                      <li key={index}>
+                        <a
+                          href={caseDetail.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500 underline"
+                        >
+                          {caseDetail.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ol>
+                </>
               ) : (
-                <p>未找到相关按例</p>
+                <p>未找到相关案例</p>
               )}
             </div>
           )
