@@ -67,6 +67,7 @@ export interface RecommendationResponse {
   title: string;
   description: string;
   content: string;
+  date: string;
   tags: string[];
   views: number;
   likes: number;
@@ -75,4 +76,10 @@ export interface RecommendationResponse {
   createdAt: Date;
   isLiked?: boolean;
   isBookmarked?: boolean;
+}
+
+export interface IRecordWithUserState extends RecommendationResponse {
+  _id: string;
+  isLiked: boolean;
+  isBookmarked: boolean;
 }

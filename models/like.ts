@@ -26,7 +26,6 @@ const likeSchema = new Schema<ILike>({
   userId: {
     type: String,
     required: true,
-    index: true,
   },
   recordId: {
     type: Schema.Types.ObjectId,
@@ -39,8 +38,34 @@ const likeSchema = new Schema<ILike>({
   },
 });
 
-// 创建复合索引以确保每个用户只能对每个记录点赞一次
-likeSchema.index({ userId: 1, recordId: 1 }, { unique: true });
+// 删除所有现有索引
+likeSchema.pre("save", async function (next) {
+  try {
+    const collection = mongoose.connection.collections["likes"];
+    if (collection) {
+      const indexes = await collection.listIndexes().toArray();
+      for (const index of indexes) {
+        // 保留_id的默认索引
+        if (index.name !== "_id_") {
+          await collection.dropIndex(index.name);
+        }
+      }
+    }
+    next();
+  } catch (error) {
+    next(error as Error);
+  }
+});
 
+// 创建新的复合唯一索引
+likeSchema.index(
+  { userId: 1, recordId: 1 },
+  {
+    unique: true,
+    name: "userId_recordId_unique", // 显式指定索引名称
+  },
+);
+
+// 防止model重复编译
 export const Like =
   mongoose.models.Like || mongoose.model<ILike>("Like", likeSchema);

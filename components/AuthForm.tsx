@@ -29,13 +29,13 @@ const AuthForm: React.FC<AuthFormProps> = ({
   useEffect(() => {
     // Detect user location using ipinfo
     fetch(`https://ipinfo.io/?token=${process.env.NEXT_PUBLIC_IPINFO_TOKEN}`)
-      .then(response => response.json())
-      .then(data => {
-        if (data.country === 'CN') {
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.country === "CN") {
           setIsChina(true);
         }
       })
-      .catch(error => console.error('Error fetching IP location:', error));
+      .catch((error) => console.error("Error fetching IP location:", error));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

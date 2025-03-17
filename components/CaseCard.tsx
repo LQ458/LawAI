@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "primereact/card";
 import { Button } from "primereact/button";
 import { IRecordWithUserState } from "@/types";
@@ -20,6 +20,26 @@ export default function CaseCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
+  useEffect(() => {
+    const viewStartTime = Date.now();
+
+    return () => {
+      const duration = (Date.now() - viewStartTime) / 1000; // 转换为秒
+      // 记录查看时长
+      fetch("/api/user-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "view",
+          recordId: record._id,
+          duration,
+        }),
+      });
+    };
+  }, [record._id]);
+
   const header = (
     <div
       className={`relative h-40 bg-gradient-to-br from-blue-50 to-white transition-all duration-300 ${
@@ -36,14 +56,20 @@ export default function CaseCard({
     </div>
   );
 
-  const formatDate = (dateString: string | Date) => {
+  const formatDate = (dateString: string) => {
     try {
-      return formatDistanceToNow(new Date(dateString), {
+      if (dateString) {
+        return formatDistanceToNow(new Date(dateString), {
+          addSuffix: true,
+          locale: zhCN,
+        });
+      }
+      return formatDistanceToNow(new Date(record.lastUpdateTime), {
         addSuffix: true,
         locale: zhCN,
       });
-    } catch {
-      console.error("Invalid date:", dateString);
+    } catch (error) {
+      console.error("Invalid date:", dateString, error);
       return "未知时间";
     }
   };
@@ -77,9 +103,11 @@ export default function CaseCard({
       <Tooltip target=".time-info" />
       <div
         className="time-info text-sm text-gray-500 cursor-help"
-        data-pr-tooltip={new Date(record.lastUpdateTime).toLocaleString()}
+        data-pr-tooltip={
+          record.date || new Date(record.lastUpdateTime).toLocaleString()
+        }
       >
-        {formatDate(record.lastUpdateTime)}
+        {formatDate(record.date)}
       </div>
     </div>
   );
@@ -118,7 +146,7 @@ export default function CaseCard({
         <div className="flex items-center justify-between text-sm text-gray-500 pt-2 border-t">
           <span>浏览 {record.views}</span>
           <span className="text-blue-500">
-            推荐指数 {record.recommendScore?.toFixed(1)}
+            推荐指数 {(record.score || 0).toFixed(1)}
           </span>
         </div>
       </div>

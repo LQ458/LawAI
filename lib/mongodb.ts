@@ -14,6 +14,30 @@ const MONGODB_OPTIONS: ConnectOptions = {
 
 let isConnected = false;
 
+async function checkAndFixIndexes() {
+  try {
+    // 检查并修复Like集合的索引
+    const likeCollection = mongoose.connection.collection("likes");
+    const likeIndexes = await likeCollection.listIndexes().toArray();
+    for (const index of likeIndexes) {
+      if (index.name !== "_id_" && index.name !== "userId_recordId_unique") {
+        await likeCollection.dropIndex(index.name);
+      }
+    }
+
+    // 检查并修复Bookmark集合的索引
+    const bookmarkCollection = mongoose.connection.collection("bookmarks");
+    const bookmarkIndexes = await bookmarkCollection.listIndexes().toArray();
+    for (const index of bookmarkIndexes) {
+      if (index.name !== "_id_" && index.name !== "userId_recordId_unique") {
+        await bookmarkCollection.dropIndex(index.name);
+      }
+    }
+  } catch (error) {
+    console.error("Error fixing indexes:", error);
+  }
+}
+
 // Connect to MongoDB
 export default async function DBconnect(): Promise<void> {
   if (!process.env.MONGODB_URL) {
@@ -29,6 +53,7 @@ export default async function DBconnect(): Promise<void> {
 
     const mongoUrl = process.env.MONGODB_URL;
     await mongoose.connect(mongoUrl, MONGODB_OPTIONS);
+    await checkAndFixIndexes();
 
     mongoose.connection.on("connected", () => {
       console.log("MongoDB connected successfully");

@@ -4,6 +4,7 @@ import DBconnect from "@/lib/mongodb";
 import { Record } from "@/models/record";
 import { Like } from "@/models/like";
 import mongoose from "mongoose";
+import { CONFIG } from "@/config";
 
 const cookieName =
   process.env.NODE_ENV === "production"
@@ -55,49 +56,92 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "案例不存在" }, { status: 404 });
     }
 
+    // 转换recordId为ObjectId
+    const recordObjectId = new mongoose.Types.ObjectId(recordId);
+
     // 检查当前用户是否已点赞
     const existingLike = await Like.findOne({
       userId: token.email,
-      recordId: new mongoose.Types.ObjectId(recordId),
+      recordId: recordObjectId,
     });
 
-    if (existingLike) {
-      // 取消点赞
-      await Promise.all([
-        Like.deleteOne({ _id: existingLike._id }),
-        Record.findByIdAndUpdate(
-          recordId,
-          { $inc: { likes: -1 } },
-          { new: true },
-        ),
-      ]);
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-      return NextResponse.json({
-        liked: false,
-        message: "已取消点赞",
-      });
-    } else {
-      // 添加点赞
-      await Promise.all([
-        Like.create({
-          userId: token.email,
-          recordId: new mongoose.Types.ObjectId(recordId),
-          createdAt: new Date(),
-        }),
-        Record.findByIdAndUpdate(
-          recordId,
-          { $inc: { likes: 1 } },
-          { new: true },
-        ),
-      ]);
+    try {
+      if (existingLike) {
+        // 取消点赞 - 先删除Like记录
+        await Like.deleteOne({ _id: existingLike._id }).session(session);
 
-      return NextResponse.json({
-        liked: true,
-        message: "点赞成功",
-      });
+        // 成功后更新Record计数
+        await Record.findByIdAndUpdate(
+          recordObjectId,
+          {
+            $inc: {
+              likes: -1,
+              interactionScore: -CONFIG.WEIGHTS.LIKE,
+            },
+          },
+          { new: true },
+        ).session(session);
+
+        await session.commitTransaction();
+
+        return NextResponse.json({
+          liked: false,
+          message: "已取消点赞",
+        });
+      } else {
+        // 添加点赞 - 先创建Like记录
+        await Like.create(
+          [
+            {
+              userId: token.email,
+              recordId: recordObjectId,
+              createdAt: new Date(),
+            },
+          ],
+          { session },
+        );
+
+        // 成功后更新Record计数
+        await Record.findByIdAndUpdate(
+          recordObjectId,
+          {
+            $inc: {
+              likes: 1,
+              interactionScore: CONFIG.WEIGHTS.LIKE,
+            },
+          },
+          { new: true },
+        ).session(session);
+
+        await session.commitTransaction();
+
+        return NextResponse.json({
+          liked: true,
+          message: "点赞成功",
+        });
+      }
+    } catch (err: unknown) {
+      await session.abortTransaction();
+
+      if (err instanceof Error && "code" in err && err.code === 11000) {
+        console.log(err.message);
+        return NextResponse.json(
+          { error: "您已经点赞过这条记录" },
+          { status: 400 },
+        );
+      }
+      throw err;
+    } finally {
+      session.endSession();
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Like error:", error);
-    return NextResponse.json({ error: "点赞操作失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "点赞操作失败" },
+      { status: 500 },
+    );
   }
 }

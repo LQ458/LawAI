@@ -8,6 +8,7 @@ export interface IRecord extends Document {
   content: string;
   views: number;
   likes: number;
+  bookmarks: number; // 添加收藏数字段
   tags: string[];
   category: string;
   relevantCases: string[]; // 相关案例ID
@@ -50,6 +51,10 @@ const recordSchema = new Schema<IRecord>({
     type: Number,
     default: 0,
   },
+  bookmarks: {
+    type: Number,
+    default: 0,
+  },
   tags: [
     {
       type: String,
@@ -88,6 +93,10 @@ recordSchema.index({ tags: 1 });
 recordSchema.index({ category: 1 });
 recordSchema.index({ interactionScore: -1 });
 recordSchema.index({ lastUpdateTime: -1 });
+
+// 添加复合索引
+recordSchema.index({ tags: 1, lastUpdateTime: -1 });
+recordSchema.index({ category: 1, interactionScore: -1 });
 
 // 添加更新interactionScore的方法
 recordSchema.methods.updateInteractionScore = function () {

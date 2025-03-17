@@ -33,18 +33,19 @@ export default function RecommendPage() {
       }
       const data = await response.json();
 
-      // 确保每个记录都有正确的用户状态字段
+      // 修改数据处理逻辑，确保包含 date 字段
       const processedRecommendations = data.recommendations.map(
         (rec: RecommendationResponse) => ({
           ...rec,
           isLiked: rec.isLiked || false,
           isBookmarked: rec.isBookmarked || false,
-          _id: rec.id || rec._id, // 确保_id字段存在
-          tags: rec.tags || [], // 确保tags字段存在
+          _id: rec.id || rec._id,
+          tags: rec.tags || [],
           views: rec.views || 0,
           likes: rec.likes || 0,
           recommendScore: rec.recommendScore || 0,
           description: rec.description || "",
+          date: rec.date, // 使用原始的 date 字段
           lastUpdateTime: rec.lastUpdateTime || new Date(),
           createdAt: rec.createdAt || new Date(),
         }),
@@ -74,7 +75,7 @@ export default function RecommendPage() {
     }
   };
 
-  // 处理点赞
+  // 修改点赞和收藏处理函数
   const handleLike = async (recordId: string) => {
     if (!session) {
       toast.current?.show({
@@ -121,6 +122,15 @@ export default function RecommendPage() {
         detail: data.liked ? "点赞成功" : "已取消点赞",
         life: 2000,
       });
+
+      // 更新用户画像
+      await fetch("/api/user-action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "like",
+          recordId,
+        }),
+      });
     } catch (err) {
       console.error("Error liking case:", err);
       toast.current?.show({
@@ -132,7 +142,7 @@ export default function RecommendPage() {
     }
   };
 
-  // 处理收藏
+  // 修改收藏处理函数
   const handleBookmark = async (recordId: string) => {
     if (!session) {
       toast.current?.show({
@@ -177,6 +187,15 @@ export default function RecommendPage() {
         summary: "成功",
         detail: data.bookmarked ? "收藏成功" : "已取消收藏",
         life: 2000,
+      });
+
+      // 更新用户画像
+      await fetch("/api/user-action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "bookmark",
+          recordId,
+        }),
       });
     } catch (err) {
       console.error("Error bookmarking case:", err);

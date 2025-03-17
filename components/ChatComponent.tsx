@@ -166,9 +166,17 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
               {caseDetails.length > 0 ? (
                 <>
                   <h3 className="text-lg font-bold">相关案例解读</h3>
-                  <p dangerouslySetInnerHTML={{ __html: aiMessage.replace(/\n/g, '<br>') }}></p> {/* Display AI message */}
+                  <p
+                    dangerouslySetInnerHTML={{
+                      __html: aiMessage.replace(/\n/g, "<br>"),
+                    }}
+                  ></p>{" "}
+                  {/* Display AI message */}
                   <div className="mt-2 flex justify-end">
-                    <CopyToClipboard text={aiMessage} onCopy={handleCopyAiMessage}>
+                    <CopyToClipboard
+                      text={aiMessage}
+                      onCopy={handleCopyAiMessage}
+                    >
                       <Button
                         severity="secondary"
                         text

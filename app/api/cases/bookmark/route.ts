@@ -4,6 +4,7 @@ import DBconnect from "@/lib/mongodb";
 import { Record } from "@/models/record";
 import { Bookmark } from "@/models/bookmark";
 import mongoose from "mongoose";
+import { CONFIG } from "@/config";
 
 const cookieName =
   process.env.NODE_ENV === "production"
@@ -56,37 +57,95 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "案例不存在" }, { status: 404 });
     }
 
+    // 转换recordId为ObjectId
+    const recordObjectId = new mongoose.Types.ObjectId(recordId);
+
     // 检查当前用户是否已收藏
     const existingBookmark = await Bookmark.findOne({
       userId: token.email,
-      recordId: new mongoose.Types.ObjectId(recordId),
+      recordId: recordObjectId,
     });
 
-    if (existingBookmark) {
-      // 取消收藏
-      await Bookmark.deleteOne({ _id: existingBookmark._id });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-      return NextResponse.json({
-        bookmarked: false,
-        message: "已取消收藏",
-        recordId: recordId,
-      });
-    } else {
-      // 添加收藏
-      await Bookmark.create({
-        userId: token.email,
-        recordId: new mongoose.Types.ObjectId(recordId),
-        createdAt: new Date(),
-      });
+    try {
+      if (existingBookmark) {
+        // 取消收藏 - 先删除Bookmark记录
+        await Bookmark.deleteOne({ _id: existingBookmark._id }).session(
+          session,
+        );
 
-      return NextResponse.json({
-        bookmarked: true,
-        message: "收藏成功",
-        recordId: recordId,
-      });
+        // 成功后更新Record计数
+        await Record.findByIdAndUpdate(
+          recordObjectId,
+          {
+            $inc: {
+              bookmarks: -1,
+              interactionScore: -CONFIG.WEIGHTS.BOOKMARK,
+            },
+          },
+          { new: true },
+        ).session(session);
+
+        await session.commitTransaction();
+
+        return NextResponse.json({
+          bookmarked: false,
+          message: "已取消收藏",
+          recordId: recordId,
+        });
+      } else {
+        // 添加收藏 - 先创建Bookmark记录
+        await Bookmark.create(
+          [
+            {
+              userId: token.email,
+              recordId: recordObjectId,
+              createdAt: new Date(),
+            },
+          ],
+          { session },
+        );
+
+        // 成功后更新Record计数
+        await Record.findByIdAndUpdate(
+          recordObjectId,
+          {
+            $inc: {
+              bookmarks: 1,
+              interactionScore: CONFIG.WEIGHTS.BOOKMARK,
+            },
+          },
+          { new: true },
+        ).session(session);
+
+        await session.commitTransaction();
+
+        return NextResponse.json({
+          bookmarked: true,
+          message: "收藏成功",
+          recordId: recordId,
+        });
+      }
+    } catch (err: unknown) {
+      await session.abortTransaction();
+
+      if (err instanceof Error && "code" in err && err.code === 11000) {
+        return NextResponse.json(
+          { error: "您已经收藏过这条记录" },
+          { status: 400 },
+        );
+      }
+      throw err;
+    } finally {
+      session.endSession();
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Bookmark error:", error);
-    return NextResponse.json({ error: "收藏操作失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "收藏操作失败" },
+      { status: 500 },
+    );
   }
 }
