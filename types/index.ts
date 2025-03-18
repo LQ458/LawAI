@@ -31,6 +31,7 @@ export type MessageOptions = Message;
 
 export interface Case {
   id: string;
+  _id: string;
   title: string;
   summary: string;
   tags: string[];
@@ -59,6 +60,7 @@ export interface IRecord {
 export interface IRecordWithUserState extends IRecord {
   isLiked: boolean;
   isBookmarked: boolean;
+  score: number;
 }
 
 export interface RecommendationResponse {

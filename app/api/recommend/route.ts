@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { Record, IRecord } from "@/models/record";
 import { Like } from "@/models/like";
 import { Bookmark } from "@/models/bookmark";
-import { UserProfile, IUserProfile } from "@/models/userProfile";
 import DBconnect from "@/lib/mongodb";
 import { getToken } from "next-auth/jwt";
 
@@ -46,93 +45,93 @@ interface RecommendationItem extends Omit<IRecord, "_id"> {
  * @param userProfile - 用户画像
  * @returns 相似度分数
  */
-function calculateSimilarityScore(
-  record: IRecord,
-  userProfile: IUserProfile,
-): number {
-  let score = 0;
+// function calculateSimilarityScore(
+//   record: IRecord,
+//   userProfile: IUserProfile,
+// ): number {
+//   let score = 0;
 
-  // 计算标签匹配度
-  record.tags.forEach((tag) => {
-    score += (userProfile.tagWeights[tag] || 0) * CONFIG.WEIGHTS.TAG_MATCH;
-  });
+//   // 计算标签匹配度
+//   record.tags.forEach((tag) => {
+//     score += (userProfile.tagWeights[tag] || 0) * CONFIG.WEIGHTS.TAG_MATCH;
+//   });
 
-  // 计算分类匹配度
-  if (record.category) {
-    score +=
-      (userProfile.categoryWeights[record.category] || 0) *
-      CONFIG.WEIGHTS.CATEGORY_MATCH;
-  }
+//   // 计算分类匹配度
+//   if (record.category) {
+//     score +=
+//       (userProfile.categoryWeights[record.category] || 0) *
+//       CONFIG.WEIGHTS.CATEGORY_MATCH;
+//   }
 
-  // 应用时间衰减
-  const daysSinceUpdate =
-    (Date.now() - new Date(record.lastUpdateTime).getTime()) /
-    (1000 * 60 * 60 * 24);
-  const timeDecay = Math.pow(CONFIG.WEIGHTS.TIME_DECAY, daysSinceUpdate);
+//   // 应用时间衰减
+//   const daysSinceUpdate =
+//     (Date.now() - new Date(record.lastUpdateTime).getTime()) /
+//     (1000 * 60 * 60 * 24);
+//   const timeDecay = Math.pow(CONFIG.WEIGHTS.TIME_DECAY, daysSinceUpdate);
 
-  // 结合交互分数
-  const interactionScore = record.interactionScore || 0;
+//   // 结合交互分数
+//   const interactionScore = record.interactionScore || 0;
 
-  // 最终分数 = (相似度 * 0.6 + 交互分数 * 0.4) * 时间衰减
-  return (score * 0.6 + interactionScore * 0.4) * timeDecay;
-}
+//   // 最终分数 = (相似度 * 0.6 + 交互分数 * 0.4) * 时间衰减
+//   return (score * 0.6 + interactionScore * 0.4) * timeDecay;
+// }
 
 /**
  * 获取个性化推荐
  * 基于用户画像和内容相似度计算推荐结果
  */
-async function getPersonalizedRecommendations(
-  userId: string,
-  limit: number,
-): Promise<RecommendationItem[]> {
-  const userProfile = await UserProfile.findOne({ userId });
+// async function getPersonalizedRecommendations(
+//   userId: string,
+//   limit: number,
+// ): Promise<RecommendationItem[]> {
+//   const userProfile = await UserProfile.findOne({ userId });
 
-  if (!userProfile) {
-    return getPopularRecommendations(limit);
-  }
+//   if (!userProfile) {
+//     return getPopularRecommendations(limit);
+//   }
 
-  // 获取候选集
-  const records = await Record.find({
-    tags: {
-      $in: Object.keys(userProfile.tagWeights).filter(
-        (tag) => userProfile.tagWeights[tag] > 0,
-      ),
-    },
-  }).limit(limit * CONFIG.RESULTS.CANDIDATE_MULTIPLIER);
+//   // 获取候选集
+//   const records = await Record.find({
+//     tags: {
+//       $in: Object.keys(userProfile.tagWeights).filter(
+//         (tag) => userProfile.tagWeights[tag] > 0,
+//       ),
+//     },
+//   }).limit(limit * CONFIG.RESULTS.CANDIDATE_MULTIPLIER);
 
-  // 计算推荐分数
-  const scoredRecords = records.map((record) => {
-    const similarityScore = calculateSimilarityScore(record, userProfile);
-    const interactionScore = record.interactionScore || 0;
+//   // 计算推荐分数
+//   const scoredRecords = records.map((record) => {
+//     const similarityScore = calculateSimilarityScore(record, userProfile);
+//     const interactionScore = record.interactionScore || 0;
 
-    return {
-      ...record.toObject(),
-      id: record._id.toString(),
-      score: similarityScore * 0.7 + interactionScore * 0.3,
-    };
-  });
+//     return {
+//       ...record.toObject(),
+//       id: record._id.toString(),
+//       score: similarityScore * 0.7 + interactionScore * 0.3,
+//     };
+//   });
 
-  // 排序并返回top N
-  return scoredRecords.sort((a, b) => b.score - a.score).slice(0, limit);
-}
+//   // 排序并返回top N
+//   return scoredRecords.sort((a, b) => b.score - a.score).slice(0, limit);
+// }
 
 /**
  * 获取热门推荐
  * 基于交互分数排序
  */
-async function getPopularRecommendations(
-  limit: number,
-): Promise<RecommendationItem[]> {
-  const records = await Record.find()
-    .sort({ interactionScore: -1 })
-    .limit(limit);
+// async function getPopularRecommendations(
+//   limit: number,
+// ): Promise<RecommendationItem[]> {
+//   const records = await Record.find()
+//     .sort({ interactionScore: -1 })
+//     .limit(limit);
 
-  return records.map((record) => ({
-    ...record.toObject(),
-    id: record._id.toString(),
-    score: record.interactionScore || 0,
-  }));
-}
+//   return records.map((record) => ({
+//     ...record.toObject(),
+//     id: record._id.toString(),
+//     score: record.interactionScore || 0,
+//   }));
+// }
 
 /**
  * 获取最新推荐
@@ -194,7 +193,7 @@ async function getRecommendations(params: RecommendationParams): Promise<{
 
   // 添加用户状态
   if (userId && recommendations.length > 0) {
-    const recordIds = recommendations.map((r) => r._id);
+    const recordIds = recommendations.map((r: IRecord) => r._id);
     const [userLikes, userBookmarks] = await Promise.all([
       Like.find({ userId, recordId: { $in: recordIds } }).lean(),
       Bookmark.find({ userId, recordId: { $in: recordIds } }).lean(),
@@ -205,7 +204,7 @@ async function getRecommendations(params: RecommendationParams): Promise<{
       userBookmarks.map((bookmark) => bookmark.recordId.toString()),
     );
 
-    recommendations = recommendations.map((rec) => ({
+    recommendations = recommendations.map((rec: IRecord) => ({
       ...rec,
       id: rec._id.toString(),
       isLiked: likedIds.has(rec._id.toString()),

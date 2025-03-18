@@ -1,8 +1,24 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Case, SortOption } from "@/types";
 import { useSession } from "next-auth/react";
 
 const PAGE_SIZE = 12;
+
+// 明确定义类型
+export interface Case {
+  _id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  isLiked: boolean;
+  isBookmarked: boolean;
+  views: number;
+  likes: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type SortOption = "latest" | "popular" | "recommended";
 
 /**
  * 案例状态管理Hook
@@ -24,39 +40,15 @@ export function useCases() {
   const [filterTags, setFilterTags] = useState<string[]>([]);
 
   // 状态缓存
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set<string>());
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(
+    new Set<string>()
+  );
 
   // 用于存储操作队列的ref
   const operationQueue = useRef<
     Array<{ type: "like" | "bookmark"; id: string; action: boolean }>
   >([]);
-
-  /**
-   * 从localStorage恢复状态
-   * 确保用户登录后立即恢复之前的状态
-   */
-  useEffect(() => {
-    if (session?.user?.email) {
-      try {
-        const storedLikedIds = localStorage.getItem(
-          `likedIds_${session.user.email}`,
-        );
-        const storedBookmarkedIds = localStorage.getItem(
-          `bookmarkedIds_${session.user.email}`,
-        );
-
-        if (storedLikedIds) {
-          setLikedIds(new Set(JSON.parse(storedLikedIds)));
-        }
-        if (storedBookmarkedIds) {
-          setBookmarkedIds(new Set(JSON.parse(storedBookmarkedIds)));
-        }
-      } catch (error) {
-        console.error("Error restoring state from localStorage:", error);
-      }
-    }
-  }, [session?.user?.email]);
 
   /**
    * 保存状态到localStorage
@@ -68,15 +60,51 @@ export function useCases() {
         try {
           localStorage.setItem(
             `${type}Ids_${session.user.email}`,
-            JSON.stringify(Array.from(ids)),
+            JSON.stringify(Array.from(ids))
           );
         } catch (error) {
-          console.error("Error saving state to localStorage:", error);
+          console.error(`Error saving ${type} ids to localStorage:`, error);
         }
       }
     },
-    [session?.user?.email],
+    [session?.user?.email]
   );
+
+  /**
+   * 从localStorage恢复状态
+   * 确保用户登录后立即恢复之前的状态
+   */
+  useEffect(() => {
+    let mounted = true;
+
+    const restoreState = () => {
+      if (session?.user?.email && mounted) {
+        try {
+          const storedLikedIds = localStorage.getItem(
+            `likedIds_${session.user.email}`
+          );
+          const storedBookmarkedIds = localStorage.getItem(
+            `bookmarkedIds_${session.user.email}`
+          );
+
+          if (storedLikedIds) {
+            setLikedIds(new Set(JSON.parse(storedLikedIds)));
+          }
+          if (storedBookmarkedIds) {
+            setBookmarkedIds(new Set(JSON.parse(storedBookmarkedIds)));
+          }
+        } catch (error) {
+          console.error("Error restoring state from localStorage:", error);
+        }
+      }
+    };
+
+    restoreState();
+
+    return () => {
+      mounted = false;
+    };
+  }, [session?.user?.email]);
 
   /**
    * 同步服务器状态
@@ -146,8 +174,8 @@ export function useCases() {
 
       try {
         // 乐观更新UI
-        setLikedIds((prev) => {
-          const newIds = new Set(prev);
+        setLikedIds((prev: Set<string>) => {
+          const newIds: Set<string> = new Set(prev);
           optimisticUpdate ? newIds.add(recordId) : newIds.delete(recordId);
           saveToLocalStorage("liked", newIds);
           return newIds;
@@ -162,8 +190,8 @@ export function useCases() {
                   isLiked: optimisticUpdate,
                   likes: c.likes + (optimisticUpdate ? 1 : -1),
                 }
-              : c,
-          ),
+              : c
+          )
         );
 
         // 添加到操作队列
@@ -177,8 +205,8 @@ export function useCases() {
       } catch (error) {
         console.error("Like error:", error);
         // 错误回滚
-        setLikedIds((prev) => {
-          const newIds = new Set(prev);
+        setLikedIds((prev: Set<string>) => {
+          const newIds: Set<string> = new Set(prev);
           isCurrentlyLiked ? newIds.add(recordId) : newIds.delete(recordId);
           saveToLocalStorage("liked", newIds);
           return newIds;
@@ -186,7 +214,7 @@ export function useCases() {
         throw error;
       }
     },
-    [session, likedIds, saveToLocalStorage],
+    [session, likedIds, saveToLocalStorage]
   );
 
   /**
@@ -204,8 +232,8 @@ export function useCases() {
 
       try {
         // 乐观更新UI
-        setBookmarkedIds((prev) => {
-          const newIds = new Set(prev);
+        setBookmarkedIds((prev: Set<string>) => {
+          const newIds: Set<string> = new Set(prev);
           optimisticUpdate ? newIds.add(recordId) : newIds.delete(recordId);
           saveToLocalStorage("bookmarked", newIds);
           return newIds;
@@ -214,8 +242,8 @@ export function useCases() {
         // 更新案例列表
         setCases((prev) =>
           prev.map((c) =>
-            c._id === recordId ? { ...c, isBookmarked: optimisticUpdate } : c,
-          ),
+            c._id === recordId ? { ...c, isBookmarked: optimisticUpdate } : c
+          )
         );
 
         // 添加到操作队列
@@ -229,8 +257,8 @@ export function useCases() {
       } catch (error) {
         console.error("Bookmark error:", error);
         // 错误回滚
-        setBookmarkedIds((prev) => {
-          const newIds = new Set(prev);
+        setBookmarkedIds((prev: Set<string>) => {
+          const newIds: Set<string> = new Set(prev);
           isCurrentlyBookmarked
             ? newIds.add(recordId)
             : newIds.delete(recordId);
@@ -240,7 +268,7 @@ export function useCases() {
         throw error;
       }
     },
-    [session, bookmarkedIds, saveToLocalStorage],
+    [session, bookmarkedIds, saveToLocalStorage]
   );
 
   /**
@@ -271,23 +299,27 @@ export function useCases() {
 
       // 更新状态缓存
       if (session?.user?.email) {
-        const newLikedIds = new Set(
-          data.cases.filter((c: Case) => c.isLiked).map((c: Case) => c._id),
-        );
-        const newBookmarkedIds = new Set(
+        // 明确指定类型
+        const newLikedIds: Set<string> = new Set(
           data.cases
-            .filter((c: Case) => c.isBookmarked)
-            .map((c: Case) => c._id),
+            .filter((c: Case) => c.isLiked)
+            .map((c: Case) => c._id.toString())
         );
 
-        setLikedIds((prev) => {
-          const merged = new Set([...prev, ...newLikedIds]);
+        const newBookmarkedIds: Set<string> = new Set(
+          data.cases
+            .filter((c: Case) => c.isBookmarked)
+            .map((c: Case) => c._id.toString())
+        );
+
+        setLikedIds((prev: Set<string>) => {
+          const merged: Set<string> = new Set([...prev, ...newLikedIds]);
           saveToLocalStorage("liked", merged);
           return merged;
         });
 
-        setBookmarkedIds((prev) => {
-          const merged = new Set([...prev, ...newBookmarkedIds]);
+        setBookmarkedIds((prev: Set<string>) => {
+          const merged: Set<string> = new Set([...prev, ...newBookmarkedIds]);
           saveToLocalStorage("bookmarked", merged);
           return merged;
         });
@@ -296,7 +328,9 @@ export function useCases() {
       setCases((prev) => [...prev, ...data.cases]);
       setHasMore(data.cases.length === PAGE_SIZE);
     } catch (err) {
-      setError(err as Error);
+      setError(
+        err instanceof Error ? err : new Error("Unknown error occurred")
+      );
     } finally {
       setLoading(false);
     }
@@ -304,15 +338,35 @@ export function useCases() {
 
   // 重置列表
   useEffect(() => {
-    setCases([]);
-    setPage(1);
-    setHasMore(true);
+    let mounted = true;
+
+    if (mounted) {
+      setCases([]);
+      setPage(1);
+      setHasMore(true);
+    }
+
+    return () => {
+      mounted = false;
+    };
   }, [sortOption, filterTags]);
 
   // 加载数据
   useEffect(() => {
-    fetchCases();
-  }, [fetchCases, page]);
+    let mounted = true;
+
+    const loadData = async () => {
+      if (mounted) {
+        await fetchCases();
+      }
+    };
+
+    loadData();
+
+    return () => {
+      mounted = false;
+    };
+  }, [fetchCases]);
 
   const loadMore = useCallback(() => {
     setPage((prev) => prev + 1);
@@ -323,11 +377,11 @@ export function useCases() {
     loading,
     error,
     hasMore,
+    loadMore,
     sortOption,
     setSortOption,
     filterTags,
     setFilterTags,
-    loadMore,
     likedIds,
     bookmarkedIds,
     handleLike,

@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pinecone } from "@pinecone-database/pinecone";
-import { OpenAI } from "openai";
 import { ZhipuAI } from "zhipuai-sdk-nodejs-v4";
-interface IRecord {
-  title: string;
-  link: string;
-  description: string;
-  content: string;
-}
 
 // 定义AI响应的接口
 interface AIResponse {

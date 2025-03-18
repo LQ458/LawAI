@@ -88,11 +88,13 @@ export default async function DBconnect(): Promise<void> {
 
     // 重建索引以确保索引定义是最新的
     if (process.env.NODE_ENV === "development") {
-      const collections = await mongoose.connection.db.collections();
-      for (const collection of collections) {
-        await collection.dropIndexes().catch(() => {}); // 忽略错误
-        if (collection.collectionName === "records") {
-          await collection.createIndex({ category: 1 });
+      const collections = await mongoose?.connection?.db?.collections();
+      if (collections) {
+        for (const collection of collections) {
+          await collection.dropIndexes().catch(() => {}); // 忽略错误
+          if (collection.collectionName === "records") {
+            await collection.createIndex({ category: 1 });
+          }
         }
       }
     }

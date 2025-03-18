@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 更新标签权重
-    record.tags.forEach((tag) => {
+    record.tags.forEach((tag: string) => {
       userProfile.tagWeights[tag] = (userProfile.tagWeights[tag] || 0) + 1;
     });
 

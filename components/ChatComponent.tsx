@@ -6,6 +6,11 @@ import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Button } from "primereact/button";
 import { ProgressSpinner } from "primereact/progressspinner";
 
+interface caseDetail {
+  title: string;
+  link: string;
+}
+
 interface ChatComponentProps {
   role: string;
   message: string;
@@ -22,7 +27,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   const [copiedMessage, setCopiedMessage] = useState(false); // Add state for message copy
   const [copiedAiMessage, setCopiedAiMessage] = useState(false); // Add state for AI message copy
   const [isRendered, setIsRendered] = useState(false);
-  const [caseDetails, setCaseDetails] = useState<any[]>([]);
+  const [caseDetails, setCaseDetails] = useState<caseDetail[]>([]);
   const [showCaseDetails, setShowCaseDetails] = useState(false);
   const [loading, setLoading] = useState(false); // Add loading state
   const [aiMessage, setAiMessage] = useState<string>(""); // Add state for AI message
@@ -57,7 +62,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
 
       const res = await response.json();
       console.log("Response format:", res); // Print the format of the response
-      const links = res.cases.map((caseDetail: any) => caseDetail.link);
+      const links = res.cases.map((caseDetail: caseDetail) => caseDetail.link);
       console.log("Fetched case links:", links); // Print only the "link" content
       setCaseDetails(res.cases);
       setAiMessage(res.data); // Set AI message
