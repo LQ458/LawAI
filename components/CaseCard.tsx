@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "primereact/card";
 import { Button } from "primereact/button";
 import { IRecordWithUserState } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { Tooltip } from "primereact/tooltip";
+import { debounce } from "lodash";
 
 interface CaseCardProps {
   record: IRecordWithUserState;
@@ -20,12 +21,8 @@ export default function CaseCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  useEffect(() => {
-    const viewStartTime = Date.now();
-
-    return () => {
-      const duration = (Date.now() - viewStartTime) / 1000; // 转换为秒
-      // 记录查看时长
+  const debouncedUserAction = useCallback(
+    debounce((recordId: string, duration: number) => {
       fetch("/api/user-action", {
         method: "POST",
         headers: {
@@ -33,12 +30,26 @@ export default function CaseCard({
         },
         body: JSON.stringify({
           action: "view",
-          recordId: record._id,
+          recordId,
           duration,
         }),
       });
+    }, 1000),
+    [],
+  );
+
+  useEffect(() => {
+    const viewStartTime = Date.now();
+    let mounted = true;
+
+    return () => {
+      mounted = false;
+      if (mounted) {
+        const duration = (Date.now() - viewStartTime) / 1000;
+        debouncedUserAction(record._id, duration);
+      }
     };
-  }, [record._id]);
+  }, [record._id, debouncedUserAction]);
 
   const header = (
     <div

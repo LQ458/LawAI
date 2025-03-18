@@ -155,48 +155,49 @@ async function getPopularRecommendations(
  */
 async function getRecommendations(params: RecommendationParams): Promise<{
   recommendations: RecommendationItem[];
+  totalRecords: number;
   hasMore: boolean;
+  currentPage: number;
 }> {
   const { page, limit, userId } = params;
-  let recommendations: RecommendationItem[] = [];
+  const skip = (page - 1) * limit;
 
-  if (userId) {
-    const personalized = await getPersonalizedRecommendations(userId, limit);
-    recommendations.push(...personalized);
-  }
+  // 使用聚合管道优化查询
+  const [results] = await Record.aggregate([
+    {
+      $facet: {
+        totalRecords: [{ $count: "count" }],
+        recommendations: [
+          { $sort: { interactionScore: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $project: {
+              _id: 1,
+              title: 1,
+              description: 1,
+              tags: 1,
+              category: 1,
+              views: 1,
+              likes: 1,
+              lastUpdateTime: 1,
+              interactionScore: 1,
+            },
+          },
+        ],
+      },
+    },
+  ]);
 
-  // 如果个性化推荐不足,补充热门内容
-  if (recommendations.length < limit) {
-    const popular = await getPopularRecommendations(
-      limit - recommendations.length,
-    );
-    recommendations.push(...popular);
-  }
-
-  // 确保所有记录都有分数
-  recommendations = recommendations.map((rec) => ({
-    ...rec,
-    score: rec.score || 0,
-  }));
-
-  // 排序、去重和分页
-  recommendations = recommendations
-    .sort((a, b) => b.score - a.score)
-    .filter(
-      (rec, index, self) => index === self.findIndex((r) => r.id === rec.id),
-    );
-
-  const paginatedResults = recommendations.slice(
-    (page - 1) * limit,
-    page * limit,
-  );
+  const totalRecords = results.totalRecords[0]?.count || 0;
+  let recommendations = results.recommendations;
 
   // 添加用户状态
-  if (userId) {
-    const recordIds = paginatedResults.map((r) => r.id);
+  if (userId && recommendations.length > 0) {
+    const recordIds = recommendations.map((r) => r._id);
     const [userLikes, userBookmarks] = await Promise.all([
-      Like.find({ userId, recordId: { $in: recordIds } }),
-      Bookmark.find({ userId, recordId: { $in: recordIds } }),
+      Like.find({ userId, recordId: { $in: recordIds } }).lean(),
+      Bookmark.find({ userId, recordId: { $in: recordIds } }).lean(),
     ]);
 
     const likedIds = new Set(userLikes.map((like) => like.recordId.toString()));
@@ -204,15 +205,19 @@ async function getRecommendations(params: RecommendationParams): Promise<{
       userBookmarks.map((bookmark) => bookmark.recordId.toString()),
     );
 
-    paginatedResults.forEach((record) => {
-      record.isLiked = likedIds.has(record.id);
-      record.isBookmarked = bookmarkedIds.has(record.id);
-    });
+    recommendations = recommendations.map((rec) => ({
+      ...rec,
+      id: rec._id.toString(),
+      isLiked: likedIds.has(rec._id.toString()),
+      isBookmarked: bookmarkedIds.has(rec._id.toString()),
+    }));
   }
 
   return {
-    recommendations: paginatedResults,
-    hasMore: recommendations.length > page * limit,
+    recommendations,
+    totalRecords,
+    hasMore: skip + limit < totalRecords,
+    currentPage: page,
   };
 }
 
@@ -243,13 +248,19 @@ export async function GET(request: NextRequest) {
     );
 
     // 获取推荐结果
-    const recommendations = await getRecommendations({
-      page,
-      limit,
-      userId: token?.email || undefined,
-    });
+    const { recommendations, totalRecords, hasMore, currentPage } =
+      await getRecommendations({
+        page,
+        limit,
+        userId: token?.email || undefined,
+      });
 
-    return NextResponse.json(recommendations);
+    return NextResponse.json({
+      recommendations,
+      totalRecords,
+      hasMore,
+      currentPage,
+    });
   } catch (error) {
     console.error("Error in recommendations:", error);
     return NextResponse.json(

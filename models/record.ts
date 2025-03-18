@@ -20,77 +20,83 @@ export interface IRecord extends Document {
   recommendScore?: number; // 推荐指数
 }
 
-const recordSchema = new Schema<IRecord>({
-  title: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  link: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  description: {
-    type: String,
-    required: true,
-  },
-  date: {
-    type: String,
-    required: true,
-  },
-  content: {
-    type: String,
-    required: true,
-  },
-  views: {
-    type: Number,
-    default: 0,
-  },
-  likes: {
-    type: Number,
-    default: 0,
-  },
-  bookmarks: {
-    type: Number,
-    default: 0,
-  },
-  tags: [
-    {
+const recordSchema = new Schema<IRecord>(
+  {
+    title: {
       type: String,
-      index: true,
+      required: true,
+      trim: true,
     },
-  ],
-  category: {
-    type: String,
-    required: true,
-    index: true,
-  },
-  relevantCases: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "Record",
+    link: {
+      type: String,
+      required: true,
+      trim: true,
     },
-  ],
-  vectorEmbedding: [
-    {
+    description: {
+      type: String,
+      required: true,
+    },
+    date: {
+      type: String,
+      required: true,
+    },
+    content: {
+      type: String,
+      required: true,
+    },
+    views: {
       type: Number,
+      default: 0,
     },
-  ],
-  interactionScore: {
-    type: Number,
-    default: 0,
+    likes: {
+      type: Number,
+      default: 0,
+    },
+    bookmarks: {
+      type: Number,
+      default: 0,
+    },
+    tags: [
+      {
+        type: String,
+        index: true,
+      },
+    ],
+    category: {
+      type: String,
+      index: false,
+    },
+    relevantCases: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Record",
+      },
+    ],
+    vectorEmbedding: [
+      {
+        type: Number,
+      },
+    ],
+    interactionScore: {
+      type: Number,
+      default: 0,
+    },
+    lastUpdateTime: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  lastUpdateTime: {
-    type: Date,
-    default: Date.now,
+  {
+    timestamps: true,
   },
-});
+);
+
+// 使用 schema.index() 定义复合索引，避免重复
+recordSchema.index({ category: 1 });
 
 // 添加索引以优化查询性能
 recordSchema.index({ title: "text", description: "text", content: "text" });
 recordSchema.index({ tags: 1 });
-recordSchema.index({ category: 1 });
 recordSchema.index({ interactionScore: -1 });
 recordSchema.index({ lastUpdateTime: -1 });
 
@@ -111,5 +117,6 @@ recordSchema.methods.updateInteractionScore = function () {
   return this.save();
 };
 
+// 确保模型只被创建一次
 export const Record =
   mongoose.models.Record || mongoose.model<IRecord>("Record", recordSchema);

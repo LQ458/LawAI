@@ -88,11 +88,11 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-start gap-2 p-4">
+    <div
+      className={`flex flex-col items-start gap-2 p-4 ${role === "user" ? "items-end" : ""}`}
+    >
       <div
-        className={`flex ${
-          role === "user" ? "justify-end" : "justify-start"
-        } items-start gap-2`}
+        className={`flex ${role === "user" ? "justify-end" : "justify-start"} items-start gap-2`}
       >
         {role === "assistant" && (
           <Avatar

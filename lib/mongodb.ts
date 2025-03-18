@@ -46,10 +46,7 @@ export default async function DBconnect(): Promise<void> {
   }
 
   try {
-    if (mongoose.connection.readyState === 1) {
-      console.log("Already connected to MongoDB");
-      return;
-    }
+    if (mongoose.connection.readyState >= 1) return;
 
     const mongoUrl = process.env.MONGODB_URL;
     await mongoose.connect(mongoUrl, MONGODB_OPTIONS);
@@ -88,6 +85,17 @@ export default async function DBconnect(): Promise<void> {
     });
 
     console.log("Connected to MongoDB");
+
+    // 重建索引以确保索引定义是最新的
+    if (process.env.NODE_ENV === "development") {
+      const collections = await mongoose.connection.db.collections();
+      for (const collection of collections) {
+        await collection.dropIndexes().catch(() => {}); // 忽略错误
+        if (collection.collectionName === "records") {
+          await collection.createIndex({ category: 1 });
+        }
+      }
+    }
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
     isConnected = false;
