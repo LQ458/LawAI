@@ -127,9 +127,9 @@ export default function CaseCard({
     <Card
       header={header}
       footer={footer}
-      className="shadow-md hover:shadow-lg transition-all duration-300 bg-white"
+      className="shadow-md hover:shadow-lg transition-all duration-300 bg-white h-full flex flex-col w-full"
     >
-      <div className="space-y-4">
+      <div className="space-y-4 flex-1 flex flex-col">
         <div className="flex flex-wrap gap-2">
           {record.tags.map((tag, index) => (
             <span
@@ -141,8 +141,10 @@ export default function CaseCard({
           ))}
         </div>
 
-        <div className="relative">
-          <p className={`text-gray-600 ${!isExpanded && "line-clamp-3"}`}>
+        <div className="relative flex-1">
+          <p
+            className={`text-gray-600 whitespace-pre-line ${!isExpanded && "line-clamp-3"}`}
+          >
             {record.description}
           </p>
           {record.description.length > 150 && (
@@ -154,8 +156,17 @@ export default function CaseCard({
           )}
         </div>
 
-        <div className="flex items-center justify-between text-sm text-gray-500 pt-2 border-t">
+        <div className="flex items-center justify-between text-sm text-gray-500 pt-2 border-t mt-auto">
           <span>浏览 {record.views}</span>
+          {record.link && (
+            <Button
+              icon="pi pi-external-link"
+              className="p-button-rounded p-button-text p-button-sm"
+              tooltip="查看原文"
+              tooltipOptions={{ position: "left" }}
+              onClick={() => window.open(record.link, "_blank")}
+            />
+          )}
           <span className="text-blue-500">
             推荐指数 {(record.score || 0).toFixed(1)}
           </span>

@@ -288,7 +288,9 @@ export default function RecommendPage() {
     () =>
       debounce((query: string) => {
         if (!query.trim()) {
+          // 清空搜索时恢复原始记录
           setFilteredRecords(recommendations);
+          setTotalRecords(recommendations.length);
           return;
         }
 
@@ -298,6 +300,8 @@ export default function RecommendPage() {
           const results = fuseRef.current.search(query);
           const filteredResults = results.map((result) => result.item);
           setFilteredRecords(filteredResults);
+          // 更新总记录数为搜索结果数量
+          setTotalRecords(filteredResults.length);
           setFirst(0); // 重置到第一页
         }
       }, 300),
@@ -315,10 +319,28 @@ export default function RecommendPage() {
   // 修改分页变化处理函数
   const onPageChange = useCallback(
     (e: { first: number; rows: number; page?: number }) => {
+      const pageNum = (e.page || 0) + 1;
+      const maxPage = Math.ceil(totalRecords / rows) || 1;
+
+      // 检查页码是否超出范围
+      if (pageNum > maxPage) {
+        toast.current?.show({
+          severity: "warn",
+          summary: "页码超出范围",
+          detail: `最大页码为 ${maxPage}，已为您跳转`,
+          life: 3000,
+        });
+
+        // 跳转到最大页码
+        const newFirst = (maxPage - 1) * rows;
+        setFirst(newFirst);
+        return;
+      }
+
       setFirst(e.first);
       setRows(e.rows);
     },
-    [],
+    [totalRecords, rows, toast],
   );
 
   // 修改数据展示逻辑
@@ -605,7 +627,7 @@ export default function RecommendPage() {
             // 数据列表显示部分
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 mb-8">
               {displayedRecords.map((record) => (
-                <div key={record._id} className="h-full">
+                <div key={record._id} className="flex w-full">
                   <MemoizedCaseCard
                     record={record}
                     onLike={() => handleLike(record._id)}
