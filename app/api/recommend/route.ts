@@ -4,9 +4,14 @@ import { Like } from "@/models/like";
 import { Bookmark } from "@/models/bookmark";
 import DBconnect from "@/lib/mongodb";
 import { getToken } from "next-auth/jwt";
+import { Article } from "@/models/article";
 
 // 推荐系统配置
 const CONFIG = {
+  CONTENT_TYPES: {
+    RECORD: "record",
+    ARTICLE: "article",
+  },
   // 权重配置
   WEIGHTS: {
     VIEW: 1, // 浏览权重
@@ -30,6 +35,7 @@ interface RecommendationParams {
   page: number;
   limit: number;
   userId?: string;
+  contentType: "record" | "article"; // 新增内容类型参数
 }
 
 interface RecommendationItem extends Omit<IRecord, "_id"> {
@@ -158,64 +164,47 @@ async function getRecommendations(params: RecommendationParams): Promise<{
   hasMore: boolean;
   currentPage: number;
 }> {
-  const { page, limit, userId } = params;
+  const { page, limit, userId, contentType } = params;
   const skip = (page - 1) * limit;
 
-  // 使用聚合管道优化查询
-  const [results] = await Record.aggregate([
+  // 根据contentType选择集合
+  const Collection =
+    contentType === CONFIG.CONTENT_TYPES.RECORD ? Record : Article;
+
+  // 先获取总记录数
+  const totalCount = await Collection.countDocuments();
+
+  // 使用聚合管道获取分页数据
+  const recommendations = await Collection.aggregate([
+    { $sort: { interactionScore: -1 } },
+    { $skip: skip },
+    { $limit: limit },
     {
-      $facet: {
-        totalRecords: [{ $count: "count" }],
-        recommendations: [
-          { $sort: { interactionScore: -1 } },
-          { $skip: skip },
-          { $limit: limit },
-          {
-            $project: {
-              _id: 1,
-              title: 1,
-              description: 1,
-              tags: 1,
-              category: 1,
-              views: 1,
-              likes: 1,
-              lastUpdateTime: 1,
-              interactionScore: 1,
-            },
-          },
-        ],
+      $project: {
+        _id: 1,
+        title: 1,
+        description: 1,
+        tags: 1,
+        category: 1,
+        views: 1,
+        likes: 1,
+        lastUpdateTime: 1,
+        interactionScore: 1,
+        ...(contentType === CONFIG.CONTENT_TYPES.ARTICLE && {
+          author: 1,
+          publishDate: 1,
+        }),
       },
     },
   ]);
 
-  const totalRecords = results.totalRecords[0]?.count || 0;
-  let recommendations = results.recommendations;
-
-  // 添加用户状态
-  if (userId && recommendations.length > 0) {
-    const recordIds = recommendations.map((r: IRecord) => r._id);
-    const [userLikes, userBookmarks] = await Promise.all([
-      Like.find({ userId, recordId: { $in: recordIds } }).lean(),
-      Bookmark.find({ userId, recordId: { $in: recordIds } }).lean(),
-    ]);
-
-    const likedIds = new Set(userLikes.map((like) => like.recordId.toString()));
-    const bookmarkedIds = new Set(
-      userBookmarks.map((bookmark) => bookmark.recordId.toString()),
-    );
-
-    recommendations = recommendations.map((rec: IRecord) => ({
-      ...rec,
-      id: rec._id.toString(),
-      isLiked: likedIds.has(rec._id.toString()),
-      isBookmarked: bookmarkedIds.has(rec._id.toString()),
-    }));
-  }
+  // 打印调试信息
+  console.log(`Total records: ${totalCount}, Page: ${page}, Limit: ${limit}`);
 
   return {
     recommendations,
-    totalRecords,
-    hasMore: skip + limit < totalRecords,
+    totalRecords: totalCount,
+    hasMore: skip + limit < totalCount,
     currentPage: page,
   };
 }
@@ -223,47 +212,47 @@ async function getRecommendations(params: RecommendationParams): Promise<{
 /**
  * 推荐API的GET处理函数
  */
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     await DBconnect();
 
-    // 获取用户信息和查询参数
-    const token = await getToken({
-      req: request,
-      cookieName:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-next-auth.session-token"
-          : "next-auth.session-token",
-      secret: process?.env?.NEXTAUTH_SECRET,
-    });
+    const searchParams = req.nextUrl.searchParams;
+    const contentType =
+      searchParams.get("contentType") || CONFIG.CONTENT_TYPES.RECORD;
 
-    const searchParams = request.nextUrl.searchParams;
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const limit = Math.min(
-      CONFIG.RESULTS.MAX_PAGE_SIZE,
-      parseInt(
-        searchParams.get("limit") || String(CONFIG.RESULTS.DEFAULT_PAGE_SIZE),
-      ),
-    );
+    // 根据contentType选择集合
+    const Collection =
+      contentType === CONFIG.CONTENT_TYPES.RECORD ? Record : Article;
 
-    // 获取推荐结果
-    const { recommendations, totalRecords, hasMore, currentPage } =
-      await getRecommendations({
-        page,
-        limit,
-        userId: token?.email || undefined,
+    // 获取所有记录
+    const recommendations = await Collection.find()
+      .sort({ interactionScore: -1 })
+      .select({
+        _id: 1,
+        title: 1,
+        description: 1,
+        tags: 1,
+        category: 1,
+        views: 1,
+        likes: 1,
+        lastUpdateTime: 1,
+        interactionScore: 1,
+        ...(contentType === CONFIG.CONTENT_TYPES.ARTICLE && {
+          author: 1,
+          publishDate: 1,
+        }),
       });
 
     return NextResponse.json({
       recommendations,
-      totalRecords,
-      hasMore,
-      currentPage,
+      totalRecords: recommendations.length,
+      hasMore: false,
+      currentPage: 1,
     });
   } catch (error) {
-    console.error("Error in recommendations:", error);
+    console.error("Recommendation error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to get recommendations" },
       { status: 500 },
     );
   }

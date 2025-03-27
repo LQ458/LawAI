@@ -42,7 +42,7 @@ export function useCases() {
   // 状态缓存
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set<string>());
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(
-    new Set<string>()
+    new Set<string>(),
   );
 
   // 用于存储操作队列的ref
@@ -60,14 +60,14 @@ export function useCases() {
         try {
           localStorage.setItem(
             `${type}Ids_${session.user.email}`,
-            JSON.stringify(Array.from(ids))
+            JSON.stringify(Array.from(ids)),
           );
         } catch (error) {
           console.error(`Error saving ${type} ids to localStorage:`, error);
         }
       }
     },
-    [session?.user?.email]
+    [session?.user?.email],
   );
 
   /**
@@ -81,10 +81,10 @@ export function useCases() {
       if (session?.user?.email && mounted) {
         try {
           const storedLikedIds = localStorage.getItem(
-            `likedIds_${session.user.email}`
+            `likedIds_${session.user.email}`,
           );
           const storedBookmarkedIds = localStorage.getItem(
-            `bookmarkedIds_${session.user.email}`
+            `bookmarkedIds_${session.user.email}`,
           );
 
           if (storedLikedIds) {
@@ -190,8 +190,8 @@ export function useCases() {
                   isLiked: optimisticUpdate,
                   likes: c.likes + (optimisticUpdate ? 1 : -1),
                 }
-              : c
-          )
+              : c,
+          ),
         );
 
         // 添加到操作队列
@@ -214,7 +214,7 @@ export function useCases() {
         throw error;
       }
     },
-    [session, likedIds, saveToLocalStorage]
+    [session, likedIds, saveToLocalStorage],
   );
 
   /**
@@ -242,8 +242,8 @@ export function useCases() {
         // 更新案例列表
         setCases((prev) =>
           prev.map((c) =>
-            c._id === recordId ? { ...c, isBookmarked: optimisticUpdate } : c
-          )
+            c._id === recordId ? { ...c, isBookmarked: optimisticUpdate } : c,
+          ),
         );
 
         // 添加到操作队列
@@ -268,7 +268,7 @@ export function useCases() {
         throw error;
       }
     },
-    [session, bookmarkedIds, saveToLocalStorage]
+    [session, bookmarkedIds, saveToLocalStorage],
   );
 
   /**
@@ -303,13 +303,13 @@ export function useCases() {
         const newLikedIds: Set<string> = new Set(
           data.cases
             .filter((c: Case) => c.isLiked)
-            .map((c: Case) => c._id.toString())
+            .map((c: Case) => c._id.toString()),
         );
 
         const newBookmarkedIds: Set<string> = new Set(
           data.cases
             .filter((c: Case) => c.isBookmarked)
-            .map((c: Case) => c._id.toString())
+            .map((c: Case) => c._id.toString()),
         );
 
         setLikedIds((prev: Set<string>) => {
@@ -329,7 +329,7 @@ export function useCases() {
       setHasMore(data.cases.length === PAGE_SIZE);
     } catch (err) {
       setError(
-        err instanceof Error ? err : new Error("Unknown error occurred")
+        err instanceof Error ? err : new Error("Unknown error occurred"),
       );
     } finally {
       setLoading(false);

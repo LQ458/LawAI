@@ -12,6 +12,7 @@ import { InputText } from "primereact/inputtext";
 import { Paginator } from "primereact/paginator";
 import Fuse from "fuse.js";
 import { debounce } from "lodash";
+import { SelectButton, SelectButtonChangeEvent } from "primereact/selectbutton";
 
 // Fuse.js 配置
 const fuseOptions = {
@@ -25,6 +26,11 @@ const PAGE_SIZE = 20; // 每页固定20条记录
 
 // 添加记忆化组件
 const MemoizedCaseCard = memo(CaseCard);
+
+// 修复 SelectButton context 类型
+interface SelectButtonContext {
+  selected: boolean;
+}
 
 export default function RecommendPage() {
   const router = useRouter();
@@ -45,86 +51,104 @@ export default function RecommendPage() {
   const [totalRecords, setTotalRecords] = useState(0);
   const [isError, setIsError] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
+  const [contentType, setContentType] = useState<"record" | "article">(
+    "record",
+  );
+
+  // 添加初始化标记
+  const isInitialLoadRef = useRef(true);
+
+  // 添加缓存状态
+  const [recordsCache, setRecordsCache] = useState<{
+    record: IRecordWithUserState[];
+    article: IRecordWithUserState[];
+  }>({
+    record: [],
+    article: [],
+  });
 
   // 获取推荐列表
-  const fetchRecommendations = useCallback(async (pageNum = 1) => {
-    try {
-      setPageLoading(true);
-      setLoading(true);
-      setIsError(false);
-      const response = await fetch(
-        `/api/recommend?page=${pageNum}&limit=${PAGE_SIZE}`,
-        {
-          cache: "no-store",
-          headers: {
-            "Content-Type": "application/json",
+  const fetchRecommendations = useCallback(
+    async (type = contentType) => {
+      try {
+        // 如果已有缓存数据，直接使用
+        if (recordsCache[type].length > 0) {
+          setRecommendations(recordsCache[type]);
+          setTotalRecords(recordsCache[type].length);
+          return;
+        }
+
+        setPageLoading(true);
+        setLoading(true);
+        setIsError(false);
+
+        const response = await fetch(
+          `/api/recommend?page=1&limit=9999&contentType=${type}`, // 获取所有数据
+          {
+            cache: "force-cache", // 使用 Next.js 缓存
+            headers: {
+              "Content-Type": "application/json",
+            },
           },
-        },
-      );
+        );
 
-      if (!response.ok) {
-        throw new Error((await response.text()) || "获取推荐失败");
+        if (!response.ok) {
+          throw new Error((await response.text()) || "获取推荐失败");
+        }
+
+        const data = await response.json();
+
+        if (!data || !Array.isArray(data.recommendations)) {
+          throw new Error("数据格式错误");
+        }
+
+        const processedRecommendations = data.recommendations.map(
+          (rec: RecommendationResponse) => ({
+            ...rec,
+            isLiked: rec.isLiked || false,
+            isBookmarked: rec.isBookmarked || false,
+            _id: rec.id || rec._id,
+            tags: rec.tags || [],
+            views: rec.views || 0,
+            likes: rec.likes || 0,
+            recommendScore: rec.recommendScore || 0,
+            description: rec.description || "",
+            date: rec.date,
+            lastUpdateTime: rec.lastUpdateTime || new Date(),
+            createdAt: rec.createdAt || new Date(),
+          }),
+        );
+
+        // 更新缓存
+        setRecordsCache((prev) => ({
+          ...prev,
+          [type]: processedRecommendations,
+        }));
+
+        // 更新状态
+        setRecommendations(processedRecommendations);
+        setTotalRecords(processedRecommendations.length);
+
+        // 更新 Fuse 实例
+        fuseRef.current = new Fuse(processedRecommendations, fuseOptions);
+      } catch (err) {
+        setIsError(true);
+        const errorMessage =
+          err instanceof Error ? err.message : "获取推荐失败";
+        setError(errorMessage);
+        toast.current?.show({
+          severity: "error",
+          summary: "错误",
+          detail: errorMessage,
+          life: 3000,
+        });
+      } finally {
+        setLoading(false);
+        setPageLoading(false);
       }
-
-      const data = await response.json();
-
-      if (!data || !Array.isArray(data.recommendations)) {
-        throw new Error("数据格式错误");
-      }
-
-      const processedRecommendations = data.recommendations.map(
-        (rec: RecommendationResponse) => ({
-          ...rec,
-          isLiked: rec.isLiked || false,
-          isBookmarked: rec.isBookmarked || false,
-          _id: rec.id || rec._id,
-          tags: rec.tags || [],
-          views: rec.views || 0,
-          likes: rec.likes || 0,
-          recommendScore: rec.recommendScore || 0,
-          description: rec.description || "",
-          date: rec.date,
-          lastUpdateTime: rec.lastUpdateTime || new Date(),
-          createdAt: rec.createdAt || new Date(),
-        }),
-      );
-
-      setRecommendations((prev) =>
-        pageNum === 1
-          ? processedRecommendations
-          : [...prev, ...processedRecommendations],
-      );
-
-      setFilteredRecords((prev) =>
-        pageNum === 1
-          ? processedRecommendations
-          : [...prev, ...processedRecommendations],
-      );
-
-      setTotalRecords(data.totalRecords);
-
-      // 更新 Fuse 实例
-      fuseRef.current = new Fuse(
-        pageNum === 1
-          ? processedRecommendations
-          : [...recommendations, ...processedRecommendations],
-        fuseOptions,
-      );
-    } catch (err) {
-      setIsError(true);
-      const errorMessage = err instanceof Error ? err.message : "获取推荐失败";
-      setError(errorMessage);
-      toast.current?.show({
-        severity: "error",
-        summary: "错误",
-        detail: errorMessage,
-        life: 3000,
-      });
-    } finally {
-      setLoading(false);
-      setPageLoading(false);
-    }
-  }, []);
+    },
+    [contentType, recordsCache],
+  );
 
   // 修改点赞和收藏处理函数
   const handleLike = async (recordId: string) => {
@@ -259,26 +283,7 @@ export default function RecommendPage() {
     }
   };
 
-  // 优化初始化加载
-  useEffect(() => {
-    let mounted = true;
-
-    const initLoad = async () => {
-      if (session?.user?.email && mounted) {
-        await fetchRecommendations(1);
-      } else if (status === "unauthenticated" && mounted) {
-        setLoading(false);
-      }
-    };
-
-    initLoad();
-
-    return () => {
-      mounted = false;
-    };
-  }, [session?.user?.email, status, fetchRecommendations]);
-
-  // 添加防抖的搜索处理
+  // 修改搜索处理函数
   const debouncedSearch = useMemo(
     () =>
       debounce((query: string) => {
@@ -288,9 +293,12 @@ export default function RecommendPage() {
         }
 
         if (fuseRef.current) {
+          // 每次搜索都使用完整的数据集
+          fuseRef.current = new Fuse(recommendations, fuseOptions);
           const results = fuseRef.current.search(query);
-          setFilteredRecords(results.map((result) => result.item));
-          setFirst(0);
+          const filteredResults = results.map((result) => result.item);
+          setFilteredRecords(filteredResults);
+          setFirst(0); // 重置到第一页
         }
       }, 300),
     [recommendations],
@@ -307,52 +315,53 @@ export default function RecommendPage() {
   // 修改分页变化处理函数
   const onPageChange = useCallback(
     (e: { first: number; rows: number; page?: number }) => {
-      const pageNum = e.page ? e.page + 1 : Math.floor(e.first / e.rows) + 1;
       setFirst(e.first);
       setRows(e.rows);
-
-      // 检查是否已经加载过该页数据
-      const startIndex = (pageNum - 1) * rows;
-      const hasPageData = recommendations.length > startIndex;
-
-      if (!hasPageData && !loading && !pageLoading) {
-        fetchRecommendations(pageNum);
-      }
     },
-    [fetchRecommendations, rows, recommendations.length, loading, pageLoading],
+    [],
   );
 
   // 修改数据展示逻辑
   const displayedRecords = useMemo(() => {
-    if (searchQuery.trim()) {
-      return filteredRecords.slice(first, first + rows);
-    }
-    return recommendations.slice(first, first + rows);
-  }, [filteredRecords, recommendations, first, rows, searchQuery]);
+    const records = searchQuery.trim() ? filteredRecords : recommendations;
+    const start = first;
+    const end = first + rows;
 
-  // 修改数据展示模板
-  const itemTemplate = useCallback(
-    (record: IRecordWithUserState) => {
-      return (
-        <MemoizedCaseCard
-          key={record._id}
-          record={record}
-          onLike={() => handleLike(record._id)}
-          onBookmark={() => handleBookmark(record._id)}
-        />
+    return records
+      .slice(start, end)
+      .filter((record): record is IRecordWithUserState =>
+        Boolean(record && record._id),
       );
-    },
-    [handleLike, handleBookmark],
-  );
+  }, [filteredRecords, recommendations, first, rows, searchQuery]);
 
   // 修改事件处理函数类型
   const handleRetry = () => {
-    fetchRecommendations(1);
+    fetchRecommendations();
   };
 
   const handleRefresh = () => {
-    fetchRecommendations(1);
+    fetchRecommendations();
   };
+
+  // 修改内容类型切换处理函数
+  const onContentTypeChange = useCallback(
+    (e: SelectButtonChangeEvent) => {
+      if (e.value === contentType) return;
+
+      setContentType(e.value);
+      setFirst(0); // 重置分页
+      fetchRecommendations(e.value);
+    },
+    [contentType, fetchRecommendations],
+  );
+
+  // 修改初始化加载
+  useEffect(() => {
+    if (session?.user?.email && isInitialLoadRef.current) {
+      fetchRecommendations();
+      isInitialLoadRef.current = false;
+    }
+  }, [session?.user?.email, fetchRecommendations]);
 
   // 处理加载状态
   if (status === "loading") {
@@ -395,6 +404,11 @@ export default function RecommendPage() {
     );
   }
 
+  const contentTypeOptions = [
+    { label: "案例推荐", value: "record" },
+    { label: "文章推荐", value: "article" },
+  ];
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <Toast ref={toast} />
@@ -417,7 +431,22 @@ export default function RecommendPage() {
                 className="p-button-text p-button-rounded"
                 onClick={() => router.push("/")}
               />
-              <h1 className="text-xl font-semibold text-gray-800">推荐案例</h1>
+              <h1 className="text-xl font-semibold text-gray-800">
+                {contentType === "record" ? "案例推荐" : "文章推荐"}
+              </h1>
+              <SelectButton
+                value={contentType}
+                onChange={onContentTypeChange}
+                options={contentTypeOptions}
+                className="ml-4"
+                pt={{
+                  button: ({ context }: { context: SelectButtonContext }) => ({
+                    className: context.selected
+                      ? "bg-primary text-white"
+                      : "bg-surface-100 text-gray-700",
+                  }),
+                }}
+              />
             </div>
             <div className="flex items-center gap-3">
               {" "}
@@ -482,20 +511,106 @@ export default function RecommendPage() {
               <Button
                 label="重试"
                 className="p-button-primary mt-4"
-                onClick={() => fetchRecommendations(1)}
+                onClick={() => fetchRecommendations()}
               />
             </div>
           ) : displayedRecords.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <i className="pi pi-search text-gray-400 text-4xl mb-4" />
-              <p className="text-gray-600">暂无匹配的案例</p>
+              <div className="text-center">
+                <p className="text-gray-600 mb-4">
+                  暂无匹配的{contentType === "record" ? "案例" : "文章"}
+                </p>
+                {searchQuery ? (
+                  // 搜索无结果时的提示
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-500">建议您：</p>
+                    <ul className="text-sm text-gray-500 list-disc list-inside mb-4">
+                      <li>检查输入是否正确</li>
+                      <li>尝试使用不同的关键词</li>
+                      <li>使用更少的筛选条件</li>
+                    </ul>
+                    <div className="flex gap-3 justify-center">
+                      <Button
+                        label="清除搜索"
+                        icon="pi pi-times"
+                        className="p-button-outlined p-button-secondary"
+                        onClick={() => setSearchQuery("")}
+                      />
+                      <Button
+                        label="返回推荐列表"
+                        icon="pi pi-list"
+                        className="p-button-primary"
+                        onClick={() => {
+                          setSearchQuery("");
+                          fetchRecommendations();
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  // 初始加载无数据时的提示
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-500">
+                      当前{contentType === "record" ? "案例" : "文章"}
+                      分类暂无内容
+                    </p>
+                    <div className="flex flex-col gap-3 items-center">
+                      <Button
+                        label={
+                          contentType === "record"
+                            ? "查看文章推荐"
+                            : "返回案例推荐"
+                        }
+                        icon={
+                          contentType === "record"
+                            ? "pi pi-file"
+                            : "pi pi-arrow-left"
+                        }
+                        className="p-button-outlined p-button-secondary w-full max-w-xs"
+                        onClick={() => {
+                          const newType =
+                            contentType === "record" ? "article" : "record";
+                          setContentType(newType);
+                          fetchRecommendations(newType);
+                        }}
+                      />
+                      <Button
+                        label="刷新当前列表"
+                        icon="pi pi-refresh"
+                        className="p-button-primary w-full max-w-xs"
+                        onClick={() => fetchRecommendations()}
+                      />
+                      <Button
+                        label="返回默认推荐"
+                        icon="pi pi-list"
+                        className="p-button-text w-full max-w-xs"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setContentType("record");
+                          fetchRecommendations("record");
+                        }}
+                      />
+                    </div>
+                    {contentType === "article" && (
+                      <p className="text-sm text-gray-500 mt-4">
+                        暂无推荐文章，您可以返回查看案例推荐
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
-            // 显示数据列表
+            // 数据列表显示部分
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 mb-8">
               {displayedRecords.map((record) => (
-                <div key={record._id} className="col-span-1">
-                  {itemTemplate(record)}
+                <div key={record._id} className="h-full">
+                  <MemoizedCaseCard
+                    record={record}
+                    onLike={() => handleLike(record._id)}
+                    onBookmark={() => handleBookmark(record._id)}
+                  />
                 </div>
               ))}
             </div>
@@ -510,6 +625,8 @@ export default function RecommendPage() {
                 onPageChange={onPageChange}
                 template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink JumpToPageInput"
                 className="bg-white shadow-sm rounded-lg p-2"
+                alwaysShow={true}
+                pageLinkSize={5}
               />
             </div>
           )}
