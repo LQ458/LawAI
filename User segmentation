@@ -1,0 +1,282 @@
+/**
+ * t-SNE → GMM soft clustering for user segmentation
+ * -------------------------------------------------
+ * Usage:
+ *   node tsne_gmm_segmentation.js
+ *
+ * Notes:
+ *   - Requires: npm i tsne-js
+ *   - Provide your own feature matrix "X" (rows = users, cols = features).
+ *   - t-SNE is used here to discover structure + aid visualization; GMM provides soft segments.
+ */
+
+import { tSNE } from 'tsne-js';
+
+// -----------------------------
+// 1) Example data (replace this)
+// -----------------------------
+/**
+ * Each row is a user; columns are features you engineer, e.g.:
+ * - normalized query-embedding dims OR topic probabilities
+ * - counts (docs generated, sessions/week)
+ * - proportions (intent mix: drafting vs research)
+ * - time features (median response latency, session length)
+ *
+ * IMPORTANT: keep magnitudes comparable before standardization below.
+ */
+const X = [
+  [0.12, 5, 0.80, 0.05, 13],  // user 1
+  [0.10, 4, 0.75, 0.08, 11],
+  [0.90, 1, 0.15, 0.10,  2],
+  [0.88, 2, 0.20, 0.07,  3],
+  [0.40, 8, 0.45, 0.20, 18],
+  [0.38, 7, 0.50, 0.18, 16],
+  [0.82, 1, 0.12, 0.05,  1],
+  [0.15, 6, 0.70, 0.10, 14],
+  [0.42, 9, 0.48, 0.21, 19],
+  [0.44, 8, 0.52, 0.22, 17]
+];
+
+// -----------------------------
+// 2) Helpers: stats & scaling
+// -----------------------------
+function mean(arr) {
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+function std(arr) {
+  const m = mean(arr);
+  const v = arr.reduce((s, x) => s + (x - m) ** 2, 0) / (arr.length - 1 || 1);
+  return Math.sqrt(Math.max(v, 1e-12));
+}
+function standardize(matrix) {
+  const n = matrix.length;
+  const d = matrix[0].length;
+  const cols = Array.from({ length: d }, (_, j) => matrix.map(r => r[j]));
+  const mus = cols.map(c => mean(c));
+  const sigs = cols.map(c => std(c));
+  const Z = matrix.map(row => row.map((x, j) => (x - mus[j]) / (sigs[j] || 1)));
+  return { Z, mus, sigs };
+}
+
+// -----------------------------
+// 3) t-SNE embedding (2D)
+// -----------------------------
+async function runTSNE(Z, {
+  dim = 2,
+  perplexity = Math.min(30, Math.max(5, Math.floor(Z.length / 3))),
+  learningRate = 200,
+  iterations = 750
+} = {}) {
+  const model = new tSNE({
+    dim,
+    perplexity,
+    earlyExaggeration: 4,
+    learningRate,
+    nIter: iterations,
+    metric: 'euclidean'
+  });
+
+  model.init({
+    data: Z,
+    type: 'dense'
+  });
+
+  for (let i = 0; i < iterations; i++) {
+    model.step();
+  }
+  // returns array of [x, y] coords
+  return model.getOutputScaled();
+}
+
+// -----------------------------
+// 4) GMM from scratch (full Σ)
+// -----------------------------
+function gaussianPDF(x, mu, Sigma) {
+  // x, mu are [2]; Sigma is 2x2
+  const d = x.length;
+  const det = Sigma[0][0] * Sigma[1][1] - Sigma[0][1] * Sigma[1][0];
+  const inv = [
+    [ Sigma[1][1] / (det + 1e-12), -Sigma[0][1] / (det + 1e-12) ],
+    [ -Sigma[1][0] / (det + 1e-12), Sigma[0][0] / (det + 1e-12) ]
+  ];
+  const diff = [x[0] - mu[0], x[1] - mu[1]];
+  const quad = diff[0]*(inv[0][0]*diff[0] + inv[0][1]*diff[1]) + diff[1]*(inv[1][0]*diff[0] + inv[1][1]*diff[1]);
+  const norm = 1 / (Math.sqrt((2 * Math.PI) ** d * Math.abs(det) + 1e-24));
+  return norm * Math.exp(-0.5 * quad);
+}
+
+function randChoice(arr, k) {
+  // choose k distinct indices
+  const idxs = [...arr.keys()];
+  for (let i = idxs.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
+  }
+  return idxs.slice(0, k);
+}
+
+function initGMM(X2, K) {
+  const n = X2.length;
+  const idx = randChoice(X2, K);
+  const means = idx.map(i => [...X2[i]]);
+  const covs = Array.from({ length: K }, () => [[1, 0], [0, 1]]);
+  const weights = Array.from({ length: K }, () => 1 / K);
+  return { means, covs, weights };
+}
+
+function eStep(X2, means, covs, weights) {
+  const n = X2.length;
+  const K = means.length;
+  const gamma = Array.from({ length: n }, () => Array(K).fill(0));
+  for (let i = 0; i < n; i++) {
+    let denom = 0;
+    const nums = new Array(K);
+    for (let k = 0; k < K; k++) {
+      const val = weights[k] * gaussianPDF(X2[i], means[k], covs[k]);
+      nums[k] = val;
+      denom += val;
+    }
+    const denomSafe = denom + 1e-24;
+    for (let k = 0; k < K; k++) {
+      gamma[i][k] = nums[k] / denomSafe;
+    }
+  }
+  return gamma;
+}
+
+function mStep(X2, gamma) {
+  const n = X2.length;
+  const d = X2[0].length; // 2
+  const K = gamma[0].length;
+
+  const Nk = Array(K).fill(0).map((_, k) => gamma.reduce((s, g) => s + g[k], 0));
+  const weights = Nk.map(v => v / n);
+
+  const means = Array.from({ length: K }, () => Array(d).fill(0));
+  for (let k = 0; k < K; k++) {
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < d; j++) {
+        means[k][j] += gamma[i][k] * X2[i][j];
+      }
+    }
+    for (let j = 0; j < d; j++) {
+      means[k][j] /= (Nk[k] + 1e-24);
+    }
+  }
+
+  const covs = Array.from({ length: K }, () => [[0, 0], [0, 0]]);
+  for (let k = 0; k < K; k++) {
+    let c00 = 0, c01 = 0, c10 = 0, c11 = 0;
+    for (let i = 0; i < n; i++) {
+      const dx0 = X2[i][0] - means[k][0];
+      const dx1 = X2[i][1] - means[k][1];
+      c00 += gamma[i][k] * dx0 * dx0;
+      c01 += gamma[i][k] * dx0 * dx1;
+      c10 += gamma[i][k] * dx1 * dx0;
+      c11 += gamma[i][k] * dx1 * dx1;
+    }
+    c00 /= (Nk[k] + 1e-24);
+    c01 /= (Nk[k] + 1e-24);
+    c10 /= (Nk[k] + 1e-24);
+    c11 /= (Nk[k] + 1e-24);
+
+    // Add a tiny diagonal jitter for numerical stability
+    const eps = 1e-6;
+    covs[k] = [[c00 + eps, c01], [c10, c11 + eps]];
+  }
+
+  return { weights, means, covs };
+}
+
+function logLikelihood(X2, means, covs, weights) {
+  let ll = 0;
+  for (const x of X2) {
+    let s = 0;
+    for (let k = 0; k < means.length; k++) {
+      s += weights[k] * gaussianPDF(x, means[k], covs[k]);
+    }
+    ll += Math.log(s + 1e-24);
+  }
+  return ll;
+}
+
+function fitGMM(X2, K, { maxIter = 200, tol = 1e-4 } = {}) {
+  let { means, covs, weights } = initGMM(X2, K);
+  let prevLL = -Infinity;
+  for (let iter = 0; iter < maxIter; iter++) {
+    const gamma = eStep(X2, means, covs, weights);
+    ({ weights, means, covs } = mStep(X2, gamma));
+    const ll = logLikelihood(X2, means, covs, weights);
+    if (iter % 10 === 0) {
+      // console.log(`GMM iter ${iter} | logL = ${ll.toFixed(4)}`);
+    }
+    if (Math.abs(ll - prevLL) < tol) break;
+    prevLL = ll;
+  }
+  return { weights, means, covs };
+}
+
+function responsibilities(X2, gmm) {
+  const { means, covs, weights } = gmm;
+  const gamma = eStep(X2, means, covs, weights);
+  return gamma; // n x K
+}
+
+// -----------------------------
+// 5) Orchestration
+// -----------------------------
+(async function main() {
+  // (a) Standardize
+  const { Z } = standardize(X);
+
+  // (b) t-SNE to 2D
+  const tsnePoints = await runTSNE(Z, {
+    dim: 2,
+    perplexity: Math.min(30, Math.max(5, Math.floor(Z.length / 3))), // heuristic
+    learningRate: 200,
+    iterations: 750
+  });
+
+  // (c) Fit GMM (choose K)
+  const K = 3; // tune via business prior, or grid on BIC (optional)
+  const gmm = fitGMM(tsnePoints, K, { maxIter: 300, tol: 1e-5 });
+
+  // (d) Soft assignments (posterior probabilities)
+  const gamma = responsibilities(tsnePoints, gmm);
+
+  // (e) Hard labels + top-1 prob (for reporting)
+  const labels = gamma.map(row => {
+    let maxIdx = 0; let maxVal = row[0];
+    for (let k = 1; k < row.length; k++) if (row[k] > maxVal) { maxVal = row[k]; maxIdx = k; }
+    return { label: maxIdx, conf: maxVal };
+  });
+
+  // (f) Simple per-cluster profiling
+  const profiles = Array.from({ length: K }, () => ({ count: 0, avgConf: 0 }));
+  labels.forEach((l, i) => {
+    profiles[l.label].count += 1;
+    profiles[l.label].avgConf += gamma[i][l.label];
+  });
+  profiles.forEach(p => p.avgConf = p.count ? p.avgConf / p.count : 0);
+
+  // (g) Print results
+  console.log('\n--- t-SNE (first 5) ---');
+  console.table(tsnePoints.slice(0, 5).map(([x, y]) => ({ x: x.toFixed(3), y: y.toFixed(3) })));
+
+  console.log('\n--- Soft cluster probabilities (gamma, first 5) ---');
+  console.table(gamma.slice(0, 5).map((row, i) => Object.fromEntries(row.map((v, k) => [`k${k}`, +v.toFixed(3)]))));
+
+  console.log('\n--- Hard labels + confidence (first 10) ---');
+  console.table(labels.map((l, i) => ({ user: i, label: l.label, conf: +l.conf.toFixed(3) })));
+
+  console.log('\n--- Cluster profiles ---');
+  console.table(profiles.map((p, k) => ({ cluster: k, count: p.count, avgConf: +p.avgConf.toFixed(3) })));
+
+  // (h) Example: routing logic (pseudo)
+  // labels.forEach(({ label }, userIdx) => {
+  //   if (label === 0) routeUserTo('research-heavy UX');
+  //   if (label === 1) routeUserTo('drafting templates UX');
+  //   if (label === 2) routeUserTo('onboarding/nudges');
+  // });
+
+})();
