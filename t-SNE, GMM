@@ -1,0 +1,402 @@
+// This is a conceptual JavaScript implementation demonstrating the flow.
+// For production, you'd use more robust libraries for t-SNE and GMM,
+// and handle data loading and preprocessing more comprehensively.
+
+// --- Library Imports (Conceptual) ---
+// In a real Node.js/browser environment, you'd import these.
+// For example, using npm:
+// npm install tsne-js
+// npm install ml-gaussian-mixture-model (or a similar GMM library)
+
+// We'll use a simplified tsne-js import for demonstration purposes.
+// In a browser, you might include it via a script tag:
+// <script src="https://cdn.jsdelivr.net/npm/tsne-js@1.0.3/tsne.min.js"></script>
+
+// Placeholder for tsne-js library, conceptually
+class TSNE {
+    constructor(opt) {
+        this.options = opt;
+        console.log('TSNE initialized with options:', opt);
+    }
+    initDataRaw(data) {
+        console.log('TSNE: Data initialized. Running initial perplexity/iterations...');
+        // Simulate initial data processing
+        this.data = data;
+        // In a real library, this would perform actual initialization.
+        // For demo, we'll just store the data and simulate output.
+    }
+    step() {
+        // Simulate a single step of t-SNE computation
+        // In a real library, this would update the embeddings.
+        // For demonstration, we'll return a placeholder transformation.
+        return true; // Simulate progress
+    }
+    get
+embeddings() {
+        console.log('TSNE: Generating embeddings...');
+        // Simulate embedding generation.
+        // In a real scenario, this would return the low-dimensional points.
+        // We'll return a randomized 2D projection for the demo.
+        return this.data.map(d => [Math.random() * 100, Math.random() * 100]);
+    }
+}
+
+
+// Placeholder for a Gaussian Mixture Model library, conceptually
+// In a real scenario, you would use a library like 'ml-gaussian-mixture-model'
+// which handles the Expectation-Maximization algorithm.
+class GaussianMixtureModel {
+    constructor(n_components = 3, max_iter = 100, tolerance = 1e-4) {
+        this.n_components = n_components;
+        this.max_iter = max_iter;
+        this.tolerance = tolerance;
+        this.means = []; // Mean of each Gaussian component
+        this.covariances = []; // Covariance matrix of each Gaussian component
+        this.weights = []; // Weight (prior probability) of each component
+        console.log(`GMM initialized with ${n_components} components.`);
+    }
+
+    /**
+     * Fits the GMM to the input data using the Expectation-Maximization (EM) algorithm.
+     * @param {number[][]} data - The input data, where each row is a data point.
+     */
+    fit(data) {
+        if (!data || data.length === 0) {
+            console.error("GMM: No data provided for fitting.");
+            return;
+        }
+
+        const n_samples = data.length;
+        const n_features = data[0].length;
+
+        // --- Initialization Step (M-step) ---
+        // Randomly initialize means, covariances, and weights.
+        // A common practice is to use K-Means to initialize means for better convergence.
+        // For this conceptual example, we'll just use random values.
+        this.means = Array.from({ length: this.n_components }, () =>
+            Array.from({ length: n_features }, () => Math.random() * 100) // Random means within data range
+        );
+        this.covariances = Array.from({ length: this.n_components }, () =>
+            Array.from({ length: n_features }, () =>
+                Array.from({ length: n_features }, (_, j) => (j === _) ? 1 : 0.01) // Identity-like covariance
+            )
+        );
+        this.weights = Array.from({ length: this.n_components }, () => 1 / this.n_components);
+
+        // --- EM Algorithm ---
+        let log_likelihood = -Infinity;
+        for (let iter = 0; iter < this.max_iter; iter++) {
+            // E-step: Calculate responsibilities (posterior probabilities)
+            const responsibilities = this._eStep(data);
+
+            // M-step: Update parameters (means, covariances, weights)
+            this._mStep(data, responsibilities);
+
+            // Calculate new log-likelihood and check for convergence
+            const new_log_likelihood = this._calculateLogLikelihood(data);
+            if (Math.abs(new_log_likelihood - log_likelihood) < this.tolerance) {
+                console.log(`GMM converged after ${iter + 1} iterations.`);
+                break;
+            }
+            log_likelihood = new_log_likelihood;
+        }
+        console.log("GMM fitting complete.");
+    }
+
+    /**
+     * E-step: Calculates the responsibilities (posterior probabilities) of each data point belonging to each component.
+     * @param {number[][]} data - The input data.
+     * @returns {number[][]} - Responsibilities matrix.
+     */
+    _eStep(data) {
+        const n_samples = data.length;
+        const responsibilities = Array(n_samples).fill(0).map(() => Array(this.n_components).fill(0));
+
+        for (let i = 0; i < n_samples; i++) {
+            let sum_probs = 0;
+            const likelihoods = Array(this.n_components).fill(0);
+            for (let k = 0; k < this.n_components; k++) {
+                // Calculate multivariate Gaussian probability density
+                likelihoods[k] = this.weights[k] * this._multivariateGaussianPdf(data[i], this.means[k], this.covariances[k]);
+                sum_probs += likelihoods[k];
+            }
+            // Normalize to get responsibilities
+            for (let k = 0; k < this.n_components; k++) {
+                responsibilities[i][k] = likelihoods[k] / sum_probs;
+            }
+        }
+        return responsibilities;
+    }
+
+    /**
+     * M-step: Updates the GMM parameters (means, covariances, weights) based on responsibilities.
+     * @param {number[][]} data - The input data.
+     * @param {number[][]} responsibilities - Responsibilities matrix from E-step.
+     */
+    _mStep(data, responsibilities) {
+        const n_samples = data.length;
+        const n_features = data[0].length;
+
+        for (let k = 0; k < this.n_components; k++) {
+            const Nk = responsibilities.reduce((sum, r) => sum + r[k], 0);
+
+            // Update weights
+            this.weights[k] = Nk / n_samples;
+
+            // Update means
+            this.means[k] = Array(n_features).fill(0);
+            for (let i = 0; i < n_samples; i++) {
+                for (let j = 0; j < n_features; j++) {
+                    this.means[k][j] += responsibilities[i][k] * data[i][j];
+                }
+            }
+            for (let j = 0; j < n_features; j++) {
+                this.means[k][j] /= Nk;
+            }
+
+            // Update covariances (simplified diagonal covariance for this example)
+            this.covariances[k] = Array(n_features).fill(0).map(() => Array(n_features).fill(0));
+            for (let i = 0; i < n_samples; i++) {
+                const diff = data[i].map((val, j) => val - this.means[k][j]);
+                for (let r = 0; r < n_features; r++) {
+                    for (let c = 0; c < n_features; c++) {
+                        this.covariances[k][r][c] += responsibilities[i][k] * diff[r] * diff[c];
+                    }
+                }
+            }
+            for (let r = 0; r < n_features; r++) {
+                for (let c = 0; c < n_features; c++) {
+                    this.covariances[k][r][c] /= Nk;
+                }
+            }
+            // Add a small value to diagonal to prevent singular matrix issues
+            for (let r = 0; r < n_features; r++) {
+                this.covariances[k][r][r] += 1e-6;
+            }
+        }
+    }
+
+    /**
+     * Calculates the probability density function (PDF) of a multivariate Gaussian distribution.
+     * @param {number[]} x - Data point.
+     * @param {number[]} mean - Mean vector.
+     * @param {number[][]} covariance - Covariance matrix.
+     * @returns {number} - PDF value.
+     */
+    _multivariateGaussianPdf(x, mean, covariance) {
+        const n = x.length;
+        const diff = x.map((val, i) => val - mean[i]);
+
+        // Calculate determinant of covariance matrix
+        // For a conceptual diagonal covariance, it's simpler
+        let det = 1;
+        for (let i = 0; i < n; i++) {
+            det *= covariance[i][i];
+        }
+        if (det <= 0) {
+            // Handle non-positive definite or singular covariance
+            return 1e-10; // Return a small positive value
+        }
+
+        // Calculate inverse of covariance matrix (simplified for diagonal)
+        const invCov = Array(n).fill(0).map(() => Array(n).fill(0));
+        for (let i = 0; i < n; i++) {
+            invCov[i][i] = 1 / covariance[i][i];
+        }
+
+        // Calculate exponential term: (x - mu)^T * Sigma^-1 * (x - mu)
+        let exponent = 0;
+        for (let i = 0; i < n; i++) {
+            let temp = 0;
+            for (let j = 0; j < n; j++) {
+                temp += invCov[i][j] * diff[j];
+            }
+            exponent += diff[i] * temp;
+        }
+
+        return (1 / (Math.sqrt(Math.pow(2 * Math.PI, n) * det))) * Math.exp(-0.5 * exponent);
+    }
+
+    /**
+     * Calculates the log-likelihood of the data given the current GMM parameters.
+     * @param {number[][]} data - The input data.
+     * @returns {number} - Log-likelihood value.
+     */
+    _calculateLogLikelihood(data) {
+        const n_samples = data.length;
+        let log_likelihood = 0;
+        for (let i = 0; i < n_samples; i++) {
+            let sum_k = 0;
+            for (let k = 0; k < this.n_components; k++) {
+                sum_k += this.weights[k] * this._multivariateGaussianPdf(data[i], this.means[k], this.covariances[k]);
+            }
+            log_likelihood += Math.log(sum_k);
+        }
+        return log_likelihood;
+    }
+
+    /**
+     * Predicts the cluster probabilities for new data points.
+     * @param {number[][]} data - New data points.
+     * @returns {number[][]} - Array of probabilities for each cluster for each data point.
+     */
+    predict_proba(data) {
+        if (!this.means.length) {
+            console.error("GMM has not been fitted yet. Call fit() first.");
+            return null;
+        }
+        const n_samples = data.length;
+        const probabilities = Array(n_samples).fill(0).map(() => Array(this.n_components).fill(0));
+
+        for (let i = 0; i < n_samples; i++) {
+            let sum_weighted_likelihoods = 0;
+            const weighted_likelihoods = Array(this.n_components).fill(0);
+            for (let k = 0; k < this.n_components; k++) {
+                weighted_likelihoods[k] = this.weights[k] * this._multivariateGaussianPdf(data[i], this.means[k], this.covariances[k]);
+                sum_weighted_likelihoods += weighted_likelihoods[k];
+            }
+            for (let k = 0; k < this.n_components; k++) {
+                probabilities[i][k] = weighted_likelihoods[k] / sum_weighted_likelihoods;
+            }
+        }
+        return probabilities;
+    }
+
+    /**
+     * Predicts the most likely cluster for each data point.
+     * @param {number[][]} data - New data points.
+     * @returns {number[]} - Array of cluster assignments (index of the most probable cluster).
+     */
+    predict(data) {
+        const probabilities = this.predict_proba(data);
+        if (!probabilities) return null;
+        return probabilities.map(p => p.indexOf(Math.max(...p)));
+    }
+}
+
+
+// --- User Segmentation Workflow ---
+async function segmentUsers() {
+    console.log("Starting user segmentation process...");
+
+    // 1. Feature Engineering and Normalization
+    // Imagine this is your actual user data. Each inner array is a user's features.
+    // Example features could be: [queries_asked, session_duration, specific_keyword_count, ... ]
+    let userData = [
+        [5, 120, 3, 0.8], // User 1: High activity, short session, legal tech interest
+        [2, 300, 1, 0.2], // User 2: Low activity, long session, broad legal research
+        [8, 90, 5, 0.9],  // User 3: Very high activity, short session, legal tech interest
+        [1, 200, 0, 0.1], // User 4: Very low activity, medium session, general inquiry
+        [6, 150, 2, 0.7], // User 5: Medium activity, medium session, legal tech interest
+        [3, 280, 1, 0.3], // User 6: Low activity, long session, broad legal research
+        [7, 110, 4, 0.85], // User 7: High activity, short session, legal tech interest
+        [2, 250, 0, 0.25], // User 8: Low activity, medium session, general inquiry
+        [4, 180, 2, 0.6],  // User 9: Medium activity, medium session, general inquiry
+        [9, 80, 6, 0.95],  // User 10: Extreme activity, very short session, legal tech interest
+    ];
+
+    console.log("Original User Data (Features):", userData);
+
+    // Normalize features (Min-Max Scaling example)
+    const n_features = userData[0].length;
+    const normalizedData = userData.map(() => Array(n_features).fill(0));
+    const minValues = Array(n_features).fill(Infinity);
+    const maxValues = Array(n_features).fill(-Infinity);
+
+    for (let i = 0; i < userData.length; i++) {
+        for (let j = 0; j < n_features; j++) {
+            if (userData[i][j] < minValues[j]) minValues[j] = userData[i][j];
+            if (userData[i][j] > maxValues[j]) maxValues[j] = userData[i][j];
+        }
+    }
+
+    for (let i = 0; i < userData.length; i++) {
+        for (let j = 0; j < n_features; j++) {
+            // Handle division by zero if max and min are the same
+            if (maxValues[j] - minValues[j] === 0) {
+                normalizedData[i][j] = 0; // Or 0.5 if you want it centered
+            } else {
+                normalizedData[i][j] = (userData[i][j] - minValues[j]) / (maxValues[j] - minValues[j]);
+            }
+        }
+    }
+    console.log("Normalized User Data:", normalizedData);
+
+    // 2. Dimensionality Reduction using t-SNE
+    console.log("Applying t-SNE for dimensionality reduction...");
+    const tsneOptions = {
+        epsilon: 10,       // Perplexity (higher for more global structure, lower for more local)
+        perplexity: 5,     // Number of nearest neighbors to consider
+        dim: 2,            // Output dimensionality (e.g., 2 for 2D visualization)
+        // seed: 1 // For reproducibility (if supported by library)
+    };
+
+    const tsne = new TSNE(tsneOptions);
+    tsne.initDataRaw(normalizedData); // Initialize t-SNE with the normalized data
+
+    // Run t-SNE for a few steps (in a real scenario, you'd iterate until convergence)
+    for (let i = 0; i < 500; i++) { // Typically 250-1000 iterations for good results
+        tsne.step();
+    }
+
+    const reducedData = tsne.getEmbeddings();
+    console.log("Data after t-SNE (2D):", reducedData);
+
+    // Conceptual note for Isomap:
+    // If using Isomap, this step would involve:
+    // 1. Instantiating an Isomap model (likely from a scientific computing library, e.g., in Python).
+    // 2. Fitting the model to `normalizedData`.
+    // 3. Transforming `normalizedData` to `reducedData` using the fitted Isomap model.
+    // Isomap is less common in pure JS for complex implementations due to heavy matrix operations.
+
+    // 3. Run Gaussian Mixture Model (GMM)
+    console.log("Applying Gaussian Mixture Model for soft clustering...");
+    const n_clusters = 3; // Example: assuming we want 3 main user segments
+    const gmm = new GaussianMixtureModel(n_clusters);
+
+    // Fit GMM to the reduced-dimensional data
+    gmm.fit(reducedData);
+
+    // Get soft clustering probabilities for each user
+    const softClusters = gmm.predict_proba(reducedData);
+    console.log("Soft Clustering Probabilities (User x Cluster):", softClusters);
+
+    // Get hard cluster assignments (most probable cluster)
+    const hardClusters = gmm.predict(reducedData);
+    console.log("Hard Cluster Assignments:", hardClusters);
+
+    // 4. Interpret Soft Clusters
+    console.log("\n--- Interpreting User Segments ---");
+    userData.forEach((user, index) => {
+        const clusterProbabilities = softClusters[index];
+        const assignedCluster = hardClusters[index];
+        const originalFeatures = user;
+        const reducedFeatures = reducedData[index];
+
+        console.log(`\nUser ${index + 1}:`);
+        console.log(`  Original Features: [${originalFeatures.map(f => f.toFixed(2)).join(', ')}]`);
+        console.log(`  Reduced Features (t-SNE): [${reducedFeatures.map(f => f.toFixed(2)).join(', ')}]`);
+        console.log(`  Soft Cluster Probabilities: ${clusterProbabilities.map((p, i) => `Cluster ${i + 1}: ${p.toFixed(3)}`).join(', ')}`);
+        console.log(`  Most Likely Cluster: Cluster ${assignedCluster + 1}`);
+
+        // Example interpretation logic:
+        // You can define thresholds to identify multi-purpose users
+        const significantProbabilities = clusterProbabilities.filter(p => p > 0.3); // Example threshold
+        if (significantProbabilities.length > 1) {
+            console.log("  Observation: This user shows characteristics of multiple segments.");
+        }
+    });
+
+    // 5. Adjust Segmentation Thresholds (Conceptual)
+    // This step would involve human review and business logic.
+    // For example, if 'Cluster 1' is "New Users" and 'Cluster 2' is "Advanced Researchers",
+    // you might define rules like:
+    // - If prob(Cluster 1) > 0.8, definitively "New User".
+    // - If prob(Cluster 1) < 0.5 AND prob(Cluster 2) > 0.6, "Advanced Researcher".
+    // - If prob(Cluster 1) > 0.4 AND prob(Cluster 2) > 0.4, "Hybrid Learner".
+    console.log("\nSegmentation process complete. Review soft probabilities for actionable insights.");
+    console.log("You can now use these segments to tailor chatbot responses, content, and proactive support.");
+}
+
+// Run the segmentation process
+segmentUsers();
