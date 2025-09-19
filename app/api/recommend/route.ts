@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Record, IRecord } from "@/models/record";
+import { Record } from "@/models/record";
 import DBconnect from "@/lib/mongodb";
 import { Article } from "@/models/article";
 
