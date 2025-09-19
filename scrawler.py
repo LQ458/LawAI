@@ -10,14 +10,22 @@ import csv
 chrome_options = Options()
 chrome_options.add_argument("--headless")  # Run headless
 chrome_options.add_argument("--disable-gpu")
-service = Service('/path/to/chromedriver')  # Update with the path to your chromedriver
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+# 使用默认的Chrome，无需指定chromedriver路径
+# service = Service('/path/to/chromedriver')
 
-# URL to scrape
-url = "https://maps.clb.org.hk/?i18n_language=en_US&map=3&startDate=2024-12&endDate=2024-12&eventId=2024120511353422735"
+# URL to scrape - 更新为更通用的URL
+url = "https://maps.clb.org.hk/?i18n_language=zh_CN&map=3&startDate=2024-01&endDate=2024-12"
 
 # Initialize WebDriver
-driver = webdriver.Chrome(service=service, options=chrome_options)
-driver.get(url)
+try:
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.get(url)
+except Exception as e:
+    print(f"WebDriver初始化失败: {e}")
+    print("请确保已安装Chrome浏览器")
+    exit(1)
 
 # Allow time for page to load fully
 time.sleep(5)  # Adjust based on network speed

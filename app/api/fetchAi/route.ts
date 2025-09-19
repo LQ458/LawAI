@@ -9,24 +9,43 @@ import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 
 export async function POST(req: NextRequest) {
   try {
+    console.log("📥 AI request received");
     const { username, chatId, message } = await req.json();
+    console.log("📝 Request data:", { username, chatId: !!chatId, messageLength: message?.length });
+    
     let sessionId = chatId;
     let chat;
     let newChatCreated = false; // 添加标记
 
+    console.log("🔌 Connecting to database...");
     await DBconnect();
+    console.log("✅ Database connected");
 
     if (!username || !message) {
+      console.log("❌ Missing username or message");
       return NextResponse.json(
         { error: "Username and message are required" },
         { status: 400 },
       );
     }
 
-    // 查找用户
-    const user = await User.findOne({ username });
+    // 查找用户 - 支持多种查找方式
+    let user;
+    if (username) {
+      // 先尝试用户名查找，然后尝试姓名查找
+      user = await User.findOne({
+        $or: [
+          { username: username },
+          { name: username }
+        ]
+      });
+    }
+    
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json({ 
+        error: "User not found", 
+        debug: { username, searchAttempted: true } 
+      }, { status: 404 });
     }
 
     // 如果没有 chatId，创建新的聊天
@@ -80,15 +99,23 @@ export async function POST(req: NextRequest) {
     }
 
     // 创建流式响应
+    console.log("🤖 Starting AI request...");
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          console.log("🔑 AI API Key exists:", !!process.env.AI_API_KEY);
+          console.log("🎯 AI Model:", process.env.AI_MODEL || "glm-4-flashx");
+          
           const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY! });
+          console.log("💬 Sending message to AI...");
+          
           const result = await ai.createCompletions({
             model: process.env.AI_MODEL || "glm-4-flashx",
             messages: chat.messages as MessageOptions[],
             stream: true,
           });
+          
+          console.log("✅ AI response stream created");
 
           let aiResponse = "";
 

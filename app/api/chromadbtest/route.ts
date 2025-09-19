@@ -36,14 +36,19 @@ export async function GET(req: NextRequest) {
         replaceWith: "***",
       },
     });
+    
+    // 获取原始向量并调整维度以匹配Pinecone索引
+    const originalVector = myaiResponse.data[0].embedding;
+    const adjustedVector = originalVector.slice(0, 1536); // 截取前1536维
+    
     const queryResponse = await mynamespace.query({
-      vector: myaiResponse.data[0].embedding,
+      vector: adjustedVector,
       topK: 5,
       includeValues: true,
       includeMetadata: true,
     });
     const filteredMatches = queryResponse.matches.filter(
-      (match) => (match?.score ?? 0) >= 0.3,
+      (match) => (match?.score ?? 0) >= 0.0,
     );
     const recordDetails = filteredMatches.map((match) => ({
       title: match.metadata?.title,

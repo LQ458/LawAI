@@ -1,38 +1,63 @@
 import mongoose, { ConnectOptions } from "mongoose";
 
 const MONGODB_OPTIONS: ConnectOptions = {
-  bufferCommands: true,
+  bufferCommands: false, // 禁用缓冲以避免超时
   autoIndex: true,
   maxPoolSize: 10,
-  serverSelectionTimeoutMS: 15000, // 增加服务器选择超时时间
+  serverSelectionTimeoutMS: 30000,
   socketTimeoutMS: 45000,
-  family: 4,
-  connectTimeoutMS: 10000,
+  connectTimeoutMS: 30000,
   retryWrites: true,
   retryReads: true,
+  // 添加更稳定的连接选项
+  heartbeatFrequencyMS: 30000,
+  maxIdleTimeMS: 30000,
 };
 
 let isConnected = false;
 
 async function checkAndFixIndexes() {
   try {
-    // 检查并修复Like集合的索引
-    const likeCollection = mongoose.connection.collection("likes");
-    const likeIndexes = await likeCollection.listIndexes().toArray();
-    for (const index of likeIndexes) {
-      if (index.name !== "_id_" && index.name !== "userId_recordId_unique") {
-        await likeCollection.dropIndex(index.name);
-      }
+    // 检查数据库连接状态
+    if (!mongoose.connection.db) {
+      console.log("数据库未连接，跳过索引检查");
+      return;
     }
 
-    // 检查并修复Bookmark集合的索引
-    const bookmarkCollection = mongoose.connection.collection("bookmarks");
-    const bookmarkIndexes = await bookmarkCollection.listIndexes().toArray();
-    for (const index of bookmarkIndexes) {
-      if (index.name !== "_id_" && index.name !== "userId_recordId_unique") {
-        await bookmarkCollection.dropIndex(index.name);
+    const db = mongoose.connection.db;
+    
+    // 检查并修复Like集合的索引（如果存在）
+    try {
+      const likeCollections = await db.listCollections({ name: "likes" }).toArray();
+      if (likeCollections.length > 0) {
+        const likeCollection = mongoose.connection.collection("likes");
+        const likeIndexes = await likeCollection.listIndexes().toArray();
+        for (const index of likeIndexes) {
+          if (index.name !== "_id_" && index.name !== "userId_recordId_unique") {
+            await likeCollection.dropIndex(index.name);
+          }
+        }
       }
+    } catch (error) {
+      console.log("Like集合不存在或索引检查失败，将在首次使用时创建");
     }
+
+    // 检查并修复Bookmark集合的索引（如果存在）
+    try {
+      const bookmarkCollections = await db.listCollections({ name: "bookmarks" }).toArray();
+      if (bookmarkCollections.length > 0) {
+        const bookmarkCollection = mongoose.connection.collection("bookmarks");
+        const bookmarkIndexes = await bookmarkCollection.listIndexes().toArray();
+        for (const index of bookmarkIndexes) {
+          if (index.name !== "_id_" && index.name !== "userId_recordId_unique") {
+            await bookmarkCollection.dropIndex(index.name);
+          }
+        }
+      }
+    } catch (error) {
+      console.log("Bookmark集合不存在或索引检查失败，将在首次使用时创建");
+    }
+    
   } catch (error) {
     console.error("Error fixing indexes:", error);
   }

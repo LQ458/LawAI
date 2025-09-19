@@ -48,7 +48,7 @@ const handler = NextAuth({
         const username = credentials?.username || "";
         const user = await User.findOne({ username });
         if (!user) {
-          throw new Error("用户不存在");
+          throw new Error("User not found");
         }
         const passwordCorrect = await bcrypt.compare(
           credentials?.password || "",
@@ -63,7 +63,7 @@ const handler = NextAuth({
           };
         }
 
-        throw new Error("密码错误");
+        throw new Error("Invalid password");
       },
     }),
   ],
@@ -80,16 +80,17 @@ const handler = NextAuth({
         if (!existingUser && account?.provider === "google") {
           // 创建新用户
           await User.create({
-            username: user.name,
+            name: user.name,
             email: user.email,
             image: user.image,
+            provider: "google",
           });
         }
 
         return true;
       } catch (error) {
         console.error("Sign in error:", error);
-        throw new Error("登录失败,请稍后重试");
+        throw new Error("Authentication failed. Please try again.");
       }
     },
 
@@ -104,16 +105,27 @@ const handler = NextAuth({
     async session({ session }) {
       try {
         if (session?.user?.email) {
-          const user = await User.findOne({ email: session.user.email });
+          // 先确保数据库连接
+          await DBconnect();
+          
+          // 使用更灵活的查找方式
+          const user = await User.findOne({ 
+            $or: [
+              { email: session.user.email },
+              { username: session.user.email }
+            ]
+          }).maxTimeMS(5000); // 设置5秒超时
+          
           if (user) {
-            session.user.name = user.username;
+            session.user.name = user.username || user.name || session.user.name;
             session.user.image = user.image || null;
           }
         }
         return session;
       } catch (error) {
         console.error("Session error:", error);
-        throw new Error("会话处理失败");
+        // 发生错误时返回原session，而不是抛出错误
+        return session;
       }
     },
   },

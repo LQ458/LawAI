@@ -427,9 +427,12 @@ export default function Home() {
           for (const line of lines) {
             if (line.startsWith("data: ")) {
               try {
-                const data = JSON.parse(line.slice(6));
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr || jsonStr === "[DONE]") continue;
+                
+                const data = JSON.parse(jsonStr);
                 const content = data.content;
-                if (content === "[DONE]") continue;
+                if (!content) continue;
 
                 result = content; // 使用完整的markdown内容
 

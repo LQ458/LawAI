@@ -69,23 +69,26 @@ export default function RecommendPage() {
 
   // 获取推荐列表
   const fetchRecommendations = useCallback(
-    async (type = contentType) => {
+    async (type = contentType, forceRefresh = false) => {
       try {
-        // 如果已有缓存数据，直接使用
-        if (recordsCache[type].length > 0) {
-          setRecommendations(recordsCache[type]);
-          setTotalRecords(recordsCache[type].length);
-          return;
-        }
-
         setPageLoading(true);
         setLoading(true);
         setIsError(false);
 
+        // 检查缓存但不作为依赖项
+        const currentCache = recordsCache;
+        if (currentCache[type].length > 0 && !forceRefresh) {
+          setRecommendations(currentCache[type]);
+          setTotalRecords(currentCache[type].length);
+          setPageLoading(false);
+          setLoading(false);
+          return;
+        }
+
         const response = await fetch(
-          `/api/recommend?page=1&limit=9999&contentType=${type}`, // 获取所有数据
+          `/api/recommend?page=1&limit=9999&contentType=${type}&t=${Date.now()}`, // 添加时间戳避免缓存
           {
-            cache: "force-cache", // 使用 Next.js 缓存
+            cache: forceRefresh ? "no-cache" : "force-cache", // 根据forceRefresh决定缓存策略
             headers: {
               "Content-Type": "application/json",
             },
@@ -147,7 +150,7 @@ export default function RecommendPage() {
         setPageLoading(false);
       }
     },
-    [contentType, recordsCache],
+    [contentType],
   );
 
   // 修改点赞和收藏处理函数
@@ -163,19 +166,27 @@ export default function RecommendPage() {
     }
 
     try {
+      console.log("Attempting to like:", { recordId, contentType, session: !!session });
+      
       const response = await fetch(`/api/cases/like`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ recordId }),
+        body: JSON.stringify({ 
+          recordId, 
+          contentType // 传递当前的contentType
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error("点赞失败");
-      }
-
+      console.log("Like response status:", response.status);
+      
       const data = await response.json();
+      console.log("Like response data:", data);
+
+      if (!response.ok) {
+        throw new Error(data.error || "点赞失败");
+      }
 
       // 更新本地状态
       setRecommendations((prev) =>
@@ -190,6 +201,37 @@ export default function RecommendPage() {
           return rec;
         }),
       );
+
+      // 同时更新缓存
+      setRecordsCache((prevCache) => ({
+        ...prevCache,
+        [contentType]: prevCache[contentType].map((rec) => {
+          if (rec._id === recordId) {
+            return {
+              ...rec,
+              likes: data.liked ? rec.likes + 1 : rec.likes - 1,
+              isLiked: data.liked,
+            } as IRecordWithUserState;
+          }
+          return rec;
+        }),
+      }));
+
+      // 更新过滤记录（如果用户正在搜索）
+      if (searchQuery.trim()) {
+        setFilteredRecords((prev) =>
+          prev.map((rec) => {
+            if (rec._id === recordId) {
+              return {
+                ...rec,
+                likes: data.liked ? rec.likes + 1 : rec.likes - 1,
+                isLiked: data.liked,
+              } as IRecordWithUserState;
+            }
+            return rec;
+          }),
+        );
+      }
 
       toast.current?.show({
         severity: "success",
@@ -230,19 +272,27 @@ export default function RecommendPage() {
     }
 
     try {
+      console.log("Attempting to bookmark:", { recordId, contentType, session: !!session });
+      
       const response = await fetch(`/api/cases/bookmark`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ recordId }),
+        body: JSON.stringify({ 
+          recordId, 
+          contentType // 传递当前的contentType
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error("收藏失败");
-      }
-
+      console.log("Bookmark response status:", response.status);
+      
       const data = await response.json();
+      console.log("Bookmark response data:", data);
+
+      if (!response.ok) {
+        throw new Error(data.error || "收藏失败");
+      }
 
       // 更新本地状态
       setRecommendations((prev) =>
@@ -256,6 +306,35 @@ export default function RecommendPage() {
           return rec;
         }),
       );
+
+      // 同时更新缓存
+      setRecordsCache((prevCache) => ({
+        ...prevCache,
+        [contentType]: prevCache[contentType].map((rec) => {
+          if (rec._id === recordId) {
+            return {
+              ...rec,
+              isBookmarked: data.bookmarked,
+            } as IRecordWithUserState;
+          }
+          return rec;
+        }),
+      }));
+
+      // 更新过滤记录（如果用户正在搜索）
+      if (searchQuery.trim()) {
+        setFilteredRecords((prev) =>
+          prev.map((rec) => {
+            if (rec._id === recordId) {
+              return {
+                ...rec,
+                isBookmarked: data.bookmarked,
+              } as IRecordWithUserState;
+            }
+            return rec;
+          }),
+        );
+      }
 
       toast.current?.show({
         severity: "success",
@@ -354,15 +433,19 @@ export default function RecommendPage() {
       .filter((record): record is IRecordWithUserState =>
         Boolean(record && record._id),
       );
-  }, [filteredRecords, recommendations, first, rows, searchQuery]);
+  }, [filteredRecords, recommendations, first, rows, searchQuery, totalRecords]);
 
   // 修改事件处理函数类型
   const handleRetry = () => {
-    fetchRecommendations();
+    // 清除缓存并重新获取
+    setRecordsCache({ record: [], article: [] });
+    fetchRecommendations(contentType, true);
   };
 
   const handleRefresh = () => {
-    fetchRecommendations();
+    // 强制刷新，绕过缓存
+    setRecordsCache({ record: [], article: [] });
+    fetchRecommendations(contentType, true);
   };
 
   // 修改内容类型切换处理函数
@@ -372,43 +455,52 @@ export default function RecommendPage() {
 
       setContentType(e.value);
       setFirst(0); // 重置分页
-      fetchRecommendations(e.value);
+      // 清除缓存，强制刷新
+      setRecordsCache({ record: [], article: [] });
+      fetchRecommendations(e.value, true);
     },
     [contentType, fetchRecommendations],
   );
 
-  // 修改初始化加载
+  // 修改初始化加载 - 允许未登录用户查看推荐，登录状态变化时重新加载
   useEffect(() => {
-    if (session?.user?.email && isInitialLoadRef.current) {
-      fetchRecommendations();
+    if (isInitialLoadRef.current) {
+      // 清除缓存，强制刷新获取最新数据（包括用户相关的点赞收藏状态）
+      setRecordsCache({ record: [], article: [] });
+      fetchRecommendations(contentType, true);
       isInitialLoadRef.current = false;
+    } else if (status === "authenticated") {
+      // 用户登录后，重新获取数据以包含用户状态
+      setRecordsCache({ record: [], article: [] });
+      fetchRecommendations(contentType, true);
     }
-  }, [session?.user?.email, fetchRecommendations]);
+  }, [status, contentType]);
 
-  // 处理加载状态
-  if (status === "loading") {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <ProgressSpinner />
-      </div>
-    );
-  }
+  // 处理加载状态 - 移除session loading检查，直接加载内容
+  // if (status === "loading") {
+  //   return (
+  //     <div className="flex justify-center items-center min-h-screen">
+  //       <ProgressSpinner />
+  //     </div>
+  //   );
+  // }
 
-  if (status === "unauthenticated") {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center p-8 bg-white rounded-lg shadow-md">
-          <h2 className="text-2xl font-bold mb-4">请先登录</h2>
-          <p className="text-gray-600 mb-6">登录后即可查看推荐案例</p>
-          <Button
-            label="返回首页"
-            className="p-button-primary"
-            onClick={() => (window.location.href = "/")}
-          />
-        </div>
-      </div>
-    );
-  }
+  // 移除未登录用户的阻拦，允许访问推荐页面
+  // if (status === "unauthenticated") {
+  //   return (
+  //     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+  //       <div className="text-center p-8 bg-white rounded-lg shadow-md">
+  //         <h2 className="text-2xl font-bold mb-4">请先登录</h2>
+  //         <p className="text-gray-600 mb-6">登录后即可查看推荐案例</p>
+  //         <Button
+  //           label="返回首页"
+  //           className="p-button-primary"
+  //           onClick={() => (window.location.href = "/")}
+  //         />
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   if (error && !recommendations.length) {
     return (
@@ -565,7 +657,8 @@ export default function RecommendPage() {
                         className="p-button-primary"
                         onClick={() => {
                           setSearchQuery("");
-                          fetchRecommendations();
+                          setRecordsCache({ record: [], article: [] });
+                          fetchRecommendations(contentType, true);
                         }}
                       />
                     </div>
@@ -594,14 +687,19 @@ export default function RecommendPage() {
                           const newType =
                             contentType === "record" ? "article" : "record";
                           setContentType(newType);
-                          fetchRecommendations(newType);
+                          // 清除缓存，强制刷新
+                          setRecordsCache({ record: [], article: [] });
+                          fetchRecommendations(newType, true);
                         }}
                       />
                       <Button
                         label="刷新当前列表"
                         icon="pi pi-refresh"
                         className="p-button-primary w-full max-w-xs"
-                        onClick={() => fetchRecommendations()}
+                        onClick={() => {
+                          setRecordsCache({ record: [], article: [] });
+                          fetchRecommendations(contentType, true);
+                        }}
                       />
                       <Button
                         label="返回默认推荐"
@@ -610,7 +708,8 @@ export default function RecommendPage() {
                         onClick={() => {
                           setSearchQuery("");
                           setContentType("record");
-                          fetchRecommendations("record");
+                          setRecordsCache({ record: [], article: [] });
+                          fetchRecommendations("record", true);
                         }}
                       />
                     </div>
