@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Record } from "@/models/record";
+import { Record, IRecord } from "@/models/record";
 import DBconnect from "@/lib/mongodb";
 import { Article } from "@/models/article";
 
@@ -136,7 +136,6 @@ const CONFIG = {
 //     score: record.interactionScore || 0,
 //   }));
 // }
-
 
 /**
  * 推荐API的GET处理函数

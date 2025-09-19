@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
             console.log("Found token with cookie name:", altCookieName);
             break;
           }
-        } catch (err) {
+        } catch {
           console.log("Failed with cookie name:", altCookieName);
         }
       }

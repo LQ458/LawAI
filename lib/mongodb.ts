@@ -38,7 +38,7 @@ async function checkAndFixIndexes() {
           }
         }
       }
-    } catch (error) {
+    } catch {
       console.log("Like集合不存在或索引检查失败，将在首次使用时创建");
     }
 
@@ -54,7 +54,7 @@ async function checkAndFixIndexes() {
           }
         }
       }
-    } catch (error) {
+    } catch {
       console.log("Bookmark集合不存在或索引检查失败，将在首次使用时创建");
     }
     
