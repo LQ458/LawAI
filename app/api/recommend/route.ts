@@ -27,7 +27,6 @@ const CONFIG = {
   },
 } as const;
 
-
 /**
  * 计算内容与用户兴趣的相似度分数
  * @param record - 待评分的记录
