@@ -47,6 +47,7 @@ export type SortOption = "latest" | "popular" | "mostLiked";
 export interface IRecord {
   _id: string;
   title: string;
+  link?: string;
   description: string;
   content: string;
   tags: string[];
@@ -67,9 +68,12 @@ export interface RecommendationResponse {
   id?: string;
   _id?: string;
   title: string;
+  link?: string;
+  author?: string;
   description: string;
   content: string;
   date: string;
+  publishDate?: Date;
   tags: string[];
   views: number;
   likes: number;
