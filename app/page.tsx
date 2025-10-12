@@ -34,6 +34,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "primereact/skeleton";
 import { Sidebar } from "primereact/sidebar";
 import { useSwipeable } from "react-swipeable";
+import TrialStatus from "@/components/TrialStatus";
+import { useTrialStatus } from "@/hooks/useTrialStatus";
 
 const steps: DriveStep[] = [
   {
@@ -272,6 +274,9 @@ export default function Home() {
 
   // 使用自定义hook管理认证状态
   const { isAuthenticated, isLoading } = useAuth();
+  
+  // 试用状态管理
+  const { refetch: refetchTrialStatus } = useTrialStatus();
 
   const [showSidebar, setShowSidebar] = useState(false);
   const isMobile = useResponsive(); // 使用自定义hook
@@ -410,7 +415,13 @@ export default function Home() {
           }),
         });
 
-        if (!response.ok) throw new Error("Failed to fetch");
+        if (!response.ok) {
+          const errorData = await response.json();
+          if (response.status === 403 && errorData.error === "Trial limit exceeded") {
+            throw new Error(errorData.message || "您的免费试用次数已用完，请升级到付费版本继续使用。");
+          }
+          throw new Error("Failed to fetch");
+        }
 
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
@@ -493,6 +504,9 @@ export default function Home() {
           ],
         };
         updateChatInfo(finalChat as Chat);
+
+        // 刷新试用状态
+        refetchTrialStatus();
 
         // 如果是新聊天，更新标题和ID
         if (!selectedChat._id) {
@@ -668,6 +682,7 @@ export default function Home() {
         onSummary={() => router.push("/summary")}
         isMobile={isMobile}
       />
+      {isAuthenticated && <TrialStatus />}
       <ChatList
         chats={chatLists}
         selectedChat={selectedChat}

@@ -29,6 +29,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // 检查用户是否是付费用户或在试用限制内
+    if (!user.isPremium && user.trialChatsUsed >= user.trialChatsLimit) {
+      return NextResponse.json(
+        { 
+          error: "Trial limit exceeded", 
+          message: "您的免费试用次数已用完，请升级到付费版本继续使用。",
+          trialChatsUsed: user.trialChatsUsed,
+          trialChatsLimit: user.trialChatsLimit
+        },
+        { status: 403 }
+      );
+    }
+
     // 如果没有 chatId，创建新的聊天
     if (!chatId) {
       try {
@@ -129,6 +142,13 @@ export async function POST(req: NextRequest) {
             });
             chat.time = getCurrentTimeInLocalTimeZone();
             await chat.save();
+
+            // 增加用户的试用聊天次数（仅对非付费用户）
+            if (!user.isPremium) {
+              await User.findByIdAndUpdate(user._id, {
+                $inc: { trialChatsUsed: 1 }
+              });
+            }
           }
 
           // 直接关闭流，不发送完成信号
