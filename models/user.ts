@@ -44,18 +44,6 @@ const userSchema = new mongoose.Schema({
     default: "credentials",
   },
   accounts: [accountSchema],
-  trialChatsUsed: {
-    type: Number,
-    default: 0,
-  },
-  trialChatsLimit: {
-    type: Number,
-    default: 10,
-  },
-  isPremium: {
-    type: Boolean,
-    default: false,
-  },
 });
 
 export default mongoose.models.User || mongoose.model("User", userSchema);
