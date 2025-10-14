@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "primereact/card";
 import { Button } from "primereact/button";
 import { IRecordWithUserState } from "@/types";
@@ -21,23 +21,21 @@ export default function CaseCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const handleUserAction = useCallback((recordId: string, duration: number) => {
-    fetch("/api/user-action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        action: "view",
-        recordId,
-        duration,
-      }),
-    });
-  }, []);
-
-  const debouncedUserAction = useMemo(
-    () => debounce(handleUserAction, 1000),
-    [handleUserAction]
+  const debouncedUserAction = useCallback(
+    debounce((recordId: string, duration: number) => {
+      fetch("/api/user-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "view",
+          recordId,
+          duration,
+        }),
+      });
+    }, 1000),
+    [],
   );
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import DynamicMarkdownRenderer from "./DynamicMarkdown";
 import { Avatar } from "primereact/avatar";
 import { CopyToClipboard } from "react-copy-to-clipboard";
@@ -34,7 +34,17 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   const [hasFetched, setHasFetched] = useState(false); // Add state to track if fetching has been done
   const [showAiResponse, setShowAiResponse] = useState(false); // Add state to toggle AI response visibility
 
-  const fetchCaseDetails = useCallback(async () => {
+  useEffect(() => {
+    if (isRendered && !hasFetched) {
+      onRender?.();
+      if (role === "assistant") {
+        fetchCaseDetails();
+        setHasFetched(true); // Set hasFetched to true after fetching
+      }
+    }
+  }, [isRendered, onRender, role, hasFetched]);
+
+  const fetchCaseDetails = async () => {
     try {
       setLoading(true); // Set loading to true when fetching starts
       const response = await fetch(
@@ -62,17 +72,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
     } finally {
       setLoading(false); // Set loading to false when fetching ends
     }
-  }, [message]);
-
-  useEffect(() => {
-    if (isRendered && !hasFetched) {
-      onRender?.();
-      if (role === "assistant") {
-        fetchCaseDetails();
-        setHasFetched(true); // Set hasFetched to true after fetching
-      }
-    }
-  }, [isRendered, onRender, role, hasFetched, fetchCaseDetails]);
+  };
 
   const handleMarkdownRender = () => {
     setIsRendered(true);

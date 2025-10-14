@@ -34,7 +34,7 @@ export const RecommendCard = ({ item, type }: RecommendCardProps) => {
             onClick={() => window.open(item.link, "_blank")}
           />
         )}
-        {type === "article" && item.publishDate && (
+        {type === "article" && (
           <span className="text-sm text-gray-500">
             发布于 {new Date(item.publishDate).toLocaleDateString()}
           </span>

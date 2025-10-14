@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Record } from "@/models/record";
+import { Record, IRecord } from "@/models/record";
+import { Like } from "@/models/like";
+import { Bookmark } from "@/models/bookmark";
 import DBconnect from "@/lib/mongodb";
+import { getToken } from "next-auth/jwt";
 import { Article } from "@/models/article";
 
 // 推荐系统配置
@@ -27,6 +30,20 @@ const CONFIG = {
   },
 } as const;
 
+// 类型定义
+interface RecommendationParams {
+  page: number;
+  limit: number;
+  userId?: string;
+  contentType: "record" | "article"; // 新增内容类型参数
+}
+
+interface RecommendationItem extends Omit<IRecord, "_id"> {
+  id: string;
+  score: number;
+  isLiked?: boolean;
+  isBookmarked?: boolean;
+}
 
 /**
  * 计算内容与用户兴趣的相似度分数
@@ -137,6 +154,60 @@ const CONFIG = {
 //   }));
 // }
 
+/**
+ * 主推荐函数
+ * 整合个性化推荐、热门推荐和最新推荐
+ */
+async function getRecommendations(params: RecommendationParams): Promise<{
+  recommendations: RecommendationItem[];
+  totalRecords: number;
+  hasMore: boolean;
+  currentPage: number;
+}> {
+  const { page, limit, userId, contentType } = params;
+  const skip = (page - 1) * limit;
+
+  // 根据contentType选择集合
+  const Collection =
+    contentType === CONFIG.CONTENT_TYPES.RECORD ? Record : Article;
+
+  // 先获取总记录数
+  const totalCount = await Collection.countDocuments();
+
+  // 使用聚合管道获取分页数据
+  const recommendations = await Collection.aggregate([
+    { $sort: { interactionScore: -1 } },
+    { $skip: skip },
+    { $limit: limit },
+    {
+      $project: {
+        _id: 1,
+        title: 1,
+        description: 1,
+        tags: 1,
+        category: 1,
+        views: 1,
+        likes: 1,
+        lastUpdateTime: 1,
+        interactionScore: 1,
+        ...(contentType === CONFIG.CONTENT_TYPES.ARTICLE && {
+          author: 1,
+          publishDate: 1,
+        }),
+      },
+    },
+  ]);
+
+  // 打印调试信息
+  console.log(`Total records: ${totalCount}, Page: ${page}, Limit: ${limit}`);
+
+  return {
+    recommendations,
+    totalRecords: totalCount,
+    hasMore: skip + limit < totalCount,
+    currentPage: page,
+  };
+}
 
 /**
  * 推荐API的GET处理函数
