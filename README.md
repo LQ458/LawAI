@@ -2,9 +2,9 @@
 
 LawAI is an AI-powered legal assistant application designed to provide users with intelligent legal case recommendations, case summaries, and legal consultation services. By integrating Baidu AI's text summarization capabilities and a RAG (Retrieval-Augmented Generation) based intelligent Q&A system, it delivers accurate and efficient legal information services.
 
-## ✨ Features
+## Features
 
-### 🔍 Intelligent Case Recommendations
+### Intelligent Case Recommendations
 
 - Personalized recommendation system based on user interactions
 - Support for case likes and bookmarks functionality
@@ -12,7 +12,7 @@ LawAI is an AI-powered legal assistant application designed to provide users wit
 - Real-time recommendation content updates
 - Smart sorting and filtering capabilities
 
-### 📝 Intelligent Case Summarization
+### Intelligent Case Summarization
 
 - Integrated with Baidu AI text summarization capabilities
 - Support for intelligent processing of long texts
@@ -20,7 +20,7 @@ LawAI is an AI-powered legal assistant application designed to provide users wit
 - Quickly grasp key case points
 - Support for multi-dimensional analysis
 
-### 💬 Intelligent Legal Q&A
+### Intelligent Legal Q&A
 
 - Context-aware Q&A based on RAG
 - Real-time conversational interaction
@@ -28,7 +28,7 @@ LawAI is an AI-powered legal assistant application designed to provide users wit
 - Accurate legal knowledge matching
 - Support for multi-turn conversation understanding
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### Frontend Technologies
 
@@ -64,7 +64,7 @@ LawAI is an AI-powered legal assistant application designed to provide users wit
 - **Package Manager:** pnpm
 - **Development Environment:** Node.js 18+
 
-## 📦 Installation & Deployment
+## Installation & Deployment
 
 ### System Requirements
 
@@ -123,7 +123,7 @@ pnpm build
 pnpm start
 ```
 
-## 🌟 Project Structure
+## Project Structure
 
 ```
 LawAI/
@@ -149,7 +149,7 @@ LawAI/
 └── types/           # TypeScript type definitions
 ```
 
-## 📚 API Documentation
+## API Documentation
 
 ### Case Recommendation API
 
@@ -227,7 +227,7 @@ Response:
 }
 ```
 
-## 🤝 Contributing Guidelines
+## Contributing Guidelines
 
 ### Development Workflow
 
@@ -254,17 +254,17 @@ Response:
 - test: Test case changes
 - chore: Other changes
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
 
-## 📞 Contact Us
+## Contact Us
 
 - Email: your.email@example.com
 - GitHub Issues: https://github.com/yourusername/LawAI/issues
 - WeChat Group: Add administrator WeChat to join discussion group
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Thanks to the following open source projects for their support:
 
@@ -274,7 +274,7 @@ Thanks to the following open source projects for their support:
 - [MongoDB](https://www.mongodb.com/) - Database
 - [NextAuth.js](https://next-auth.js.org/) - Authentication solution
 
-## 📝 Changelog
+## Changelog
 
 ### [1.0.0] - 2024-02-06
 
@@ -298,9 +298,9 @@ Thanks to the following open source projects for their support:
 
 LawAI 是一个基于人工智能的法律助手应用，旨在为用户提供智能化的法律案例推荐、案例总结和法律咨询服务。通过整合百度AI的文本摘要能力和基于RAG(检索增强生成)的智能问答系统，为用户提供准确、高效的法律信息服务。
 
-## ✨ 功能特性
+## 功能特性
 
-### 🔍 智能案例推荐
+### 智能案例推荐
 
 - 基于用户交互的个性化推荐系统
 - 支持案例点赞、收藏功能
@@ -308,7 +308,7 @@ LawAI 是一个基于人工智能的法律助手应用，旨在为用户提供�
 - 实时更新推荐内容
 - 智能排序和过滤功能
 
-### 📝 案例智能总结
+### 案例智能总结
 
 - 集成百度AI文本摘要能力
 - 支持长文本智能处理
@@ -316,7 +316,7 @@ LawAI 是一个基于人工智能的法律助手应用，旨在为用户提供�
 - 快速把握案例要点
 - 支持多维度解析
 
-### 💬 智能法律问答
+### 智能法律问答
 
 - 基于RAG的上下文感知问答
 - 实时对话交互
@@ -324,7 +324,7 @@ LawAI 是一个基于人工智能的法律助手应用，旨在为用户提供�
 - 准确的法律知识匹配
 - 支持多轮对话理解
 
-## 🛠️ 技术栈
+## 技术栈
 
 ### 前端技术
 
@@ -360,7 +360,7 @@ LawAI 是一个基于人工智能的法律助手应用，旨在为用户提供�
 - **包管理:** pnpm
 - **开发环境:** Node.js 18+
 
-## 📦 安装部署
+## 安装部署
 
 ### 环境要求
 
@@ -419,7 +419,7 @@ pnpm build
 pnpm start
 ```
 
-## 🌟 项目结构
+## 项目结构
 
 ```
 LawAI/
@@ -445,7 +445,7 @@ LawAI/
 └── types/           # TypeScript类型定义
 ```
 
-## 📚 API文档
+## API文档
 
 ### 案例推荐API
 
@@ -523,7 +523,7 @@ POST /api/chat
 }
 ```
 
-## 🤝 贡献指南
+## 贡献指南
 
 ### 开发流程
 
@@ -550,17 +550,17 @@ POST /api/chat
 - test: 测试用例修改
 - chore: 其他修改
 
-## 📄 开源协议
+## 开源协议
 
 本项目采用 MIT 协议 - 查看 [LICENSE](LICENSE) 文件了解详情
 
-## 📞 联系我们
+## 联系我们
 
 - Email: your.email@example.com
 - GitHub Issues: https://github.com/yourusername/LawAI/issues
 - 微信群: 添加管理员微信加入交流群
 
-## 🙏 致谢
+## 致谢
 
 感谢以下开源项目的支持：
 
@@ -570,7 +570,7 @@ POST /api/chat
 - [MongoDB](https://www.mongodb.com/) - 数据库
 - [NextAuth.js](https://next-auth.js.org/) - 认证方案
 
-## 📝 更新日志
+## 更新日志
 
 ### [1.0.0] - 2024-02-06
 
