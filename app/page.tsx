@@ -36,7 +36,6 @@ import { Sidebar } from "primereact/sidebar";
 import { useSwipeable } from "react-swipeable";
 import TrialStatus from "@/components/TrialStatus";
 import { useTrialStatus } from "@/hooks/useTrialStatus";
-import { useAnonymousTrial } from "@/hooks/useAnonymousTrial";
 
 const steps: DriveStep[] = [
   {
@@ -278,7 +277,6 @@ export default function Home() {
   
   // 试用状态管理
   const { refetch: refetchTrialStatus } = useTrialStatus();
-  const { incrementUsage: incrementAnonymousUsage, trialData: anonymousTrialData } = useAnonymousTrial();
 
   const [showSidebar, setShowSidebar] = useState(false);
   const isMobile = useResponsive(); // 使用自定义hook
@@ -414,15 +412,13 @@ export default function Home() {
             username: session?.user?.name,
             chatId: selectedChat._id.toString(),
             message: currentMessage,
-            isAnonymous: !isAuthenticated,
-            anonymousUsage: anonymousTrialData.usage,
           }),
         });
 
         if (!response.ok) {
           const errorData = await response.json();
-          if (response.status === 403 && (errorData.error === "Trial limit exceeded" || errorData.error === "Anonymous trial limit exceeded")) {
-            throw new Error(errorData.message || "您的免费试用次数已用完，请登录或注册继续使用。");
+          if (response.status === 403 && errorData.error === "Trial limit exceeded") {
+            throw new Error(errorData.message || "您的免费试用次数已用完，请升级到付费版本继续使用。");
           }
           throw new Error("Failed to fetch");
         }
@@ -510,11 +506,7 @@ export default function Home() {
         updateChatInfo(finalChat as Chat);
 
         // 刷新试用状态
-        if (isAuthenticated) {
-          refetchTrialStatus();
-        } else {
-          incrementAnonymousUsage();
-        }
+        refetchTrialStatus();
 
         // 如果是新聊天，更新标题和ID
         if (!selectedChat._id) {
@@ -591,7 +583,7 @@ export default function Home() {
         setIsSending(false);
       }
     },
-    [message, selectedChat, session?.user?.name, updateChatInfo, refetchTrialStatus, setChatLists, setIsSending, setMessage, setSelectedChat, anonymousTrialData.usage, incrementAnonymousUsage, isAuthenticated],
+    [message, selectedChat, session?.user?.name, updateChatInfo, refetchTrialStatus, setChatLists, setIsSending, setMessage, setSelectedChat],
   );
 
   // 添加删除确认对话框
@@ -674,27 +666,15 @@ export default function Home() {
     if (isAuthenticated && !isLoading) {
       setInitChat(true);
       fetchChats();
-    } else if (!isAuthenticated && !isLoading) {
-      // For anonymous users, create a default chat to get started
-      setInitChat(true);
-      const defaultChat: Chat = {
-        _id: "anonymous_default",
-        title: "新的聊天",
-        userId: "anonymous",
-        time: getCurrentTimeInLocalTimeZone(),
-        messages: [],
-      };
-      setSelectedChat(defaultChat);
-      setChatLists([defaultChat]);
     }
-  }, [isAuthenticated, isLoading, fetchChats, setChatLists, setSelectedChat]);
+  }, [isAuthenticated, isLoading, fetchChats]);
 
   // 侧边栏内容
   const sidebarContent = (
     <div className="flex flex-col w-full h-full p-4">
       <ChatHeader
         onNewChat={createNewChat}
-        onRefresh={isAuthenticated ? fetchChats : () => {}}
+        onRefresh={fetchChats}
         isAuthenticated={isAuthenticated}
         disableNewChat={chatLists.some(
           (chat) => chat.title === "新的聊天" && !chat._id,
@@ -702,7 +682,7 @@ export default function Home() {
         onSummary={() => router.push("/summary")}
         isMobile={isMobile}
       />
-      <TrialStatus />
+      {isAuthenticated && <TrialStatus />}
       <ChatList
         chats={chatLists}
         selectedChat={selectedChat}
@@ -833,7 +813,7 @@ export default function Home() {
       <Toast ref={toast} />
       <ConfirmDialog />
       <Dialog
-        visible={!isAuthenticated && !isLoading && anonymousTrialData.hasExceeded}
+        visible={!isAuthenticated && !isLoading}
         onHide={() => {}}
         content={() => (
           <AuthForm
