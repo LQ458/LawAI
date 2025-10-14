@@ -1,3 +1,299 @@
+# LawAI - Intelligent Legal Assistant
+
+LawAI is an AI-powered legal assistant application designed to provide users with intelligent legal case recommendations, case summaries, and legal consultation services. By integrating Baidu AI's text summarization capabilities and a RAG (Retrieval-Augmented Generation) based intelligent Q&A system, it delivers accurate and efficient legal information services.
+
+## ✨ Features
+
+### 🔍 Intelligent Case Recommendations
+
+- Personalized recommendation system based on user interactions
+- Support for case likes and bookmarks functionality
+- Infinite scroll loading for more cases
+- Real-time recommendation content updates
+- Smart sorting and filtering capabilities
+
+### 📝 Intelligent Case Summarization
+
+- Integrated with Baidu AI text summarization capabilities
+- Support for intelligent processing of long texts
+- Generate structured case summaries
+- Quickly grasp key case points
+- Support for multi-dimensional analysis
+
+### 💬 Intelligent Legal Q&A
+
+- Context-aware Q&A based on RAG
+- Real-time conversational interaction
+- History record preservation
+- Accurate legal knowledge matching
+- Support for multi-turn conversation understanding
+
+## 🛠️ Technology Stack
+
+### Frontend Technologies
+
+- **Core Framework:** Next.js 15, React 19
+- **Development Language:** TypeScript
+- **UI Framework:**
+  - TailwindCSS - Atomic CSS framework
+  - PrimeReact - UI component library
+- **State Management:** React Hooks
+- **Routing System:** Next.js App Router
+
+### Backend Technologies
+
+- **Service Framework:** Next.js API Routes
+- **Database:** MongoDB
+- **Authentication System:** NextAuth.js
+- **API Integration:**
+  - Baidu AI Interface
+  - Intelligent Q&A System
+
+### AI Capabilities
+
+- **Text Summarization:** Baidu AI ERNIE-Text
+- **Intelligent Q&A:**
+  - RAG Retrieval-Augmented Generation
+  - Vector database support
+  - Knowledge base management
+
+### Development Tools
+
+- **Code Standards:** ESLint, Prettier
+- **Version Control:** Git
+- **Package Manager:** pnpm
+- **Development Environment:** Node.js 18+
+
+## 📦 Installation & Deployment
+
+### System Requirements
+
+- Node.js 18.0.0 or higher
+- MongoDB 4.4 or higher
+- pnpm 8.0.0 or higher
+
+### Installation Steps
+
+1. Clone the project
+
+```bash
+git clone https://github.com/LQ458/LawAI.git
+cd LawAI
+```
+
+2. Install dependencies
+
+```bash
+pnpm install
+```
+
+3. Environment Configuration
+   Create a `.env.local` file and configure the following environment variables:
+
+```env
+# Database Configuration
+MONGODB_URL=mongodb+srv://your-username:your-password@your-cluster.mongodb.net/your-database
+
+# Authentication Configuration
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-nextauth-secret
+GOOGLE_ID=your-google-client-id
+GOOGLE_SECRET=your-google-client-secret
+
+# Baidu AI Configuration
+BAIDU_AK=your-baidu-api-key
+BAIDU_SK=your-baidu-secret-key
+
+# AI Model Configuration
+AI_API_KEY=your-ai-api-key
+AI_BASE_URL=https://your-ai-service-url
+AI_MODEL=your-model-name
+```
+
+4. Development Environment Startup
+
+```bash
+pnpm dev
+```
+
+5. Production Environment Build
+
+```bash
+pnpm build
+pnpm start
+```
+
+## 🌟 Project Structure
+
+```
+LawAI/
+├── app/                # Page components
+│   ├── api/           # API routes
+│   │   ├── auth/      # Authentication related APIs
+│   │   ├── cases/     # Case related APIs
+│   │   ├── chat/      # Chat related APIs
+│   │   └── summary/   # Summary related APIs
+│   ├── recommend/     # Recommendation page
+│   └── summary/       # Summary page
+├── components/        # Reusable components
+│   ├── CaseCard/     # Case card component
+│   ├── ChatComponent/# Chat component
+│   └── AuthForm/     # Authentication form component
+├── models/           # Data models
+│   ├── record.ts    # Case record model
+│   ├── user.ts      # User model
+│   └── chat.ts      # Chat record model
+├── hooks/            # Custom Hooks
+├── lib/             # Utility functions
+├── styles/          # Style files
+└── types/           # TypeScript type definitions
+```
+
+## 📚 API Documentation
+
+### Case Recommendation API
+
+```typescript
+// Get recommended case list
+GET /api/recommend
+Query Parameters:
+- page: number (optional) - Page number
+- limit: number (optional) - Items per page
+Response:
+{
+  recommendations: IRecord[];
+  hasMore: boolean;
+}
+
+// Case like
+POST /api/cases/like
+Request Body:
+{
+  recordId: string;
+}
+Response:
+{
+  liked: boolean;
+}
+
+// Case bookmark
+POST /api/cases/bookmark
+Request Body:
+{
+  recordId: string;
+}
+Response:
+{
+  bookmarked: boolean;
+}
+```
+
+### Case Summary API
+
+```typescript
+// Generate case summary
+POST /api/summary
+Request Body:
+{
+  content: string;  // Original case text
+  options?: {
+    maxLength?: number;  // Maximum length
+    format?: string;    // Output format
+  }
+}
+Response:
+{
+  summary: string;
+  keywords: string[];
+}
+```
+
+### Intelligent Q&A API
+
+```typescript
+// Send question to get answer
+POST /api/chat
+Request Body:
+{
+  message: string;
+  chatId?: string;  // Session ID
+  context?: string; // Context information
+}
+Response:
+{
+  answer: string;
+  references?: string[];
+  confidence: number;
+}
+```
+
+## 🤝 Contributing Guidelines
+
+### Development Workflow
+
+1. Fork the project
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+### Code Standards
+
+- Use ESLint and Prettier for code formatting
+- Follow TypeScript best practices
+- Use functional components and Hooks for components
+- Keep code clean and maintainable
+
+### Commit Convention
+
+- feat: New feature
+- fix: Bug fix
+- docs: Documentation changes
+- style: Code formatting changes
+- refactor: Code refactoring
+- test: Test case changes
+- chore: Other changes
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+
+## 📞 Contact Us
+
+- Email: your.email@example.com
+- GitHub Issues: https://github.com/yourusername/LawAI/issues
+- WeChat Group: Add administrator WeChat to join discussion group
+
+## 🙏 Acknowledgments
+
+Thanks to the following open source projects for their support:
+
+- [Next.js](https://nextjs.org/) - React application development framework
+- [PrimeReact](https://primereact.org/) - UI component library
+- [TailwindCSS](https://tailwindcss.com/) - CSS framework
+- [MongoDB](https://www.mongodb.com/) - Database
+- [NextAuth.js](https://next-auth.js.org/) - Authentication solution
+
+## 📝 Changelog
+
+### [1.0.0] - 2024-02-06
+
+- Initial release
+- Implemented basic recommendation functionality
+- Integrated Baidu AI summarization capabilities
+- Added RAG intelligent Q&A system
+
+### [0.9.0] - 2024-01-20
+
+- Beta version release
+- Completed core functionality development
+- Optimized user experience
+- Fixed known issues
+
+---
+
+# 中文版本 (Chinese Version)
+
 # LawAI - 智能法律助手
 
 LawAI 是一个基于人工智能的法律助手应用，旨在为用户提供智能化的法律案例推荐、案例总结和法律咨询服务。通过整合百度AI的文本摘要能力和基于RAG(检索增强生成)的智能问答系统，为用户提供准确、高效的法律信息服务。
