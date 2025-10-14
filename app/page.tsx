@@ -284,7 +284,7 @@ export default function Home() {
       setIsInitialScrollRef(false);
       scrollToBottom(chatEndRef.current);
     }
-  }, [markdownRendered]);
+  }, [markdownRendered, isInitialScrollRef, scrollToBottom]);
 
   UseTour(steps, isAuthenticated ? "authenticated" : "unauthenticated"); // 添加用户引导
 
@@ -338,12 +338,12 @@ export default function Home() {
         detail: "获取聊天列表失败",
       });
     }
-  }, [session?.user?.name, updateChatInfo]); // 移除 selectedChat 依赖
+  }, [session?.user?.name, updateChatInfo, selectedChat?._id, setChatLists, setSelectedChat]);
 
   // 处理聊天选择
   const handleChatSelect = useCallback((chat: Chat) => {
     setSelectedChat(chat);
-  }, []);
+  }, [setSelectedChat]);
 
   // 修改 requestAi 函数
   const requestAi = useCallback(
@@ -569,7 +569,7 @@ export default function Home() {
         setIsSending(false);
       }
     },
-    [message, selectedChat, session?.user?.name, updateChatInfo],
+    [message, selectedChat, session?.user?.name, updateChatInfo, setChatLists, setIsSending, setMessage, setSelectedChat],
   );
 
   // 添加删除确认对话框
@@ -653,7 +653,7 @@ export default function Home() {
       setInitChat(true);
       fetchChats();
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, fetchChats]);
 
   // 侧边栏内容
   const sidebarContent = (

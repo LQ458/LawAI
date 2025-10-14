@@ -102,11 +102,12 @@ const RenderedContent = (props: { content: string }) => {
 
 // 主组件
 const MarkdownRenderer: React.FC<MarkdownProps> = (props) => {
+  const { onLoad } = props;
   const mdRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    props.onLoad?.();
-  }, [props.onLoad]);
+    onLoad?.();
+  }, [onLoad]);
 
   return (
     <div
