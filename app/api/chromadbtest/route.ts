@@ -11,20 +11,28 @@ interface AIResponse {
   }>;
 }
 
+/**
+ * 向量检索API - 完全开放访问 (已登录和未登录用户均可使用)
+ * 用于根据用户查询搜索相关案例
+ */
 export async function GET(req: NextRequest) {
   try {
+    console.log("🔍 Vector search request received");
     const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY! });
     const mynamespace = pc
       .index("finalindex", process.env.HOST_ADD!)
       .namespace("caselist");
     const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY });
     const searchString = req.nextUrl.searchParams.get("search");
+    
     if (!searchString) {
       return NextResponse.json(
         { error: "Search string is required" },
         { status: 400 },
       );
     }
+    
+    console.log(`📝 Search query: ${searchString}`);
     const myaiResponse = await ai.createEmbeddings({
       input: searchString,
       model: "embedding-3",
@@ -72,9 +80,11 @@ export async function GET(req: NextRequest) {
     console.log("content:" + aiResponse.choices[0].message.content);
     const aiMessage =
       aiResponse.choices?.[0]?.message?.content || "No response from AI";
+    
+    console.log("✅ Vector search completed successfully");
     return NextResponse.json({ cases: recordDetails, data: aiMessage });
   } catch (error) {
-    console.error("Error fetching cases:", error);
+    console.error("❌ Error fetching cases:", error);
     return NextResponse.json(
       { error: "Failed to fetch cases" },
       { status: 500 },

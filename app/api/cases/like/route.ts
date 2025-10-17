@@ -1,76 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
 import DBconnect from "@/lib/mongodb";
 import { Record } from "@/models/record";
 import { Article } from "@/models/article";
 import { Like } from "@/models/like";
 import mongoose from "mongoose";
 import { CONFIG } from "@/config";
-
-const cookieName = process.env.NODE_ENV === "production"
-  ? "__Secure-next-auth.session-token"
-  : "next-auth.session-token";
-
-// 备选cookie名称（用于Codespace等环境）
-const alternateCookieNames = [
-  "next-auth.session-token",
-  "__Secure-next-auth.session-token",
-  "next-auth.session-token.0",
-  "next-auth.session-token.1"
-];
+import { getUserIdentityFromBody } from "@/lib/authUtils";
 
 /**
- * 点赞/取消点赞API
- *
+ * 点赞/取消点赞API - 支持已登录和未登录用户
+ * 
  * @route POST /api/cases/like
  * @param {string} recordId - 案例记录ID或文章ID
  * @param {string} contentType - 内容类型："record" 或 "article"
+ * @param {string} guestId - 未登录用户的临时ID (可选)
  * @returns {object} 包含点赞状态的响应
  *
  * @description
- * 1. 验证用户登录状态和请求参数
- * 2. 根据contentType检查记录或文章是否存在
- * 3. 根据当前用户判断是否已点赞
- * 4. 更新点赞状态和计数
+ * 已登录用户: 更新数据库中的点赞记录
+ * 未登录用户: 返回成功,由前端管理点赞状态
  */
 export async function POST(req: NextRequest) {
   try {
-    // 尝试多种方式获取用户认证信息
-    let token = await getToken({
-      req,
-      cookieName,
-      secret: process?.env?.NEXTAUTH_SECRET,
-    });
+    console.log("👍 Like API request received");
+    const body = await req.json();
+    const { recordId, contentType = "record", guestId } = body;
 
-    // 如果第一次失败，尝试其他cookie名称
-    if (!token?.email) {
-      for (const altCookieName of alternateCookieNames) {
-        try {
-          token = await getToken({
-            req,
-            cookieName: altCookieName,
-            secret: process?.env?.NEXTAUTH_SECRET,
-          });
-          if (token?.email) {
-            console.log("Found token with cookie name:", altCookieName);
-            break;
-          }
-        } catch {
-          console.log("Failed with cookie name:", altCookieName);
-        }
-      }
+    // 获取用户身份
+    const identity = await getUserIdentityFromBody(req, body, true);
+    
+    if (!identity) {
+      return NextResponse.json({ error: "User identity required" }, { status: 400 });
     }
 
-    console.log("Like API - Token:", token?.email ? "Found" : "Not found");
-
-    if (!token?.email) {
-      return NextResponse.json({ error: "请先登录" }, { status: 401 });
-    }
+    console.log(`👤 Like request from ${identity.isGuest ? 'guest' : 'user'}: ${identity.identifier}`);
 
     // 验证请求参数
-    const { recordId, contentType = "record" } = await req.json();
-    console.log("Like API - Params:", { recordId, contentType });
-    
     if (!recordId) {
       return NextResponse.json({ error: "缺少必要参数" }, { status: 400 });
     }
@@ -85,6 +50,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "无效的记录ID" }, { status: 400 });
     }
 
+    // 临时用户模式 - 直接返回成功,由前端管理状态
+    if (identity.isGuest) {
+      console.log("🔓 Guest mode: Like tracked on frontend");
+      return NextResponse.json({ 
+        success: true,
+        isGuest: true,
+        message: "点赞状态已更新(本地保存)",
+        liked: true, // 前端会根据实际状态切换
+      });
+    }
+
+    // 已登录用户模式 - 更新数据库
     await DBconnect();
 
     // 根据contentType检查记录是否存在
@@ -101,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     // 检查当前用户是否已点赞
     const existingLike = await Like.findOne({
-      userId: token.email,
+      userId: identity.userId,
       recordId: recordObjectId,
     });
 
@@ -127,8 +104,10 @@ export async function POST(req: NextRequest) {
 
         await session.commitTransaction();
 
+        console.log("✅ Like cancelled for user");
         return NextResponse.json({
           liked: false,
+          isGuest: false,
           message: "已取消点赞",
         });
       } else {
@@ -136,9 +115,9 @@ export async function POST(req: NextRequest) {
         await Like.create(
           [
             {
-              userId: token.email,
+              userId: identity.userId,
               recordId: recordObjectId,
-              contentType, // 添加内容类型标记
+              contentType,
               createdAt: new Date(),
             },
           ],
@@ -159,8 +138,10 @@ export async function POST(req: NextRequest) {
 
         await session.commitTransaction();
 
+        console.log("✅ Liked successfully");
         return NextResponse.json({
           liked: true,
+          isGuest: false,
           message: "点赞成功",
         });
       }
@@ -179,7 +160,7 @@ export async function POST(req: NextRequest) {
       session.endSession();
     }
   } catch (error: unknown) {
-    console.error("Like error:", error);
+    console.error("❌ Like error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "点赞操作失败" },
       { status: 500 },

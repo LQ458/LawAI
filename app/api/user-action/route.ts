@@ -1,20 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
 import { Record } from "@/models/record";
 import { UserProfile } from "@/models/userProfile";
 import DBconnect from "@/lib/mongodb";
+import { getUserIdentityFromBody } from "@/lib/authUtils";
 
+/**
+ * 用户行为追踪API - 支持已登录和未登录用户
+ * 已登录用户: 记录到数据库
+ * 未登录用户: 返回成功,由前端管理行为数据
+ */
 export async function POST(request: NextRequest) {
   try {
-    await DBconnect();
+    console.log("📊 User action tracking request received");
+    const body = await request.json();
+    const { action, recordId, duration, guestId } = body;
 
-    const token = await getToken({ req: request });
-    if (!token?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // 获取用户身份
+    const identity = await getUserIdentityFromBody(request, body, true);
+    
+    if (!identity) {
+      return NextResponse.json({ error: "User identity required" }, { status: 400 });
     }
 
-    const data = await request.json();
-    const { action, recordId, duration } = data;
+    console.log(`👤 Tracking ${action} for ${identity.isGuest ? 'guest' : 'user'}: ${identity.identifier}`);
+
+    // 临时用户模式 - 直接返回成功,由前端管理数据
+    if (identity.isGuest) {
+      console.log("🔓 Guest mode: Action tracked on frontend");
+      return NextResponse.json({ 
+        success: true, 
+        isGuest: true,
+        message: "Action tracked locally"
+      });
+    }
+
+    // 已登录用户模式 - 记录到数据库
+    await DBconnect();
 
     const record = await Record.findById(recordId);
     if (!record) {
@@ -52,10 +73,10 @@ export async function POST(request: NextRequest) {
     });
 
     // 更新用户画像
-    let userProfile = await UserProfile.findOne({ userId: token.email });
+    let userProfile = await UserProfile.findOne({ userId: identity.userId });
     if (!userProfile) {
       userProfile = new UserProfile({
-        userId: token.email,
+        userId: identity.userId,
         tagWeights: {},
         categoryWeights: {},
         interactions: {
@@ -93,9 +114,10 @@ export async function POST(request: NextRequest) {
 
     await userProfile.save();
 
-    return NextResponse.json({ success: true });
+    console.log("✅ Action tracked in database");
+    return NextResponse.json({ success: true, isGuest: false });
   } catch (error) {
-    console.error("Error in user action:", error);
+    console.error("❌ Error in user action:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

@@ -1,34 +1,34 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
 import DBconnect from "@/lib/mongodb";
 import { Record } from "@/models/record";
 import { Like } from "@/models/like";
 import { Bookmark } from "@/models/bookmark";
 import mongoose from "mongoose";
-const cookieName =
-  process.env.NODE_ENV === "production"
-    ? "__Secure-next-auth.session-token"
-    : "next-auth.session-token";
+import { getUserIdentityFromBody } from "@/lib/authUtils";
 
 /**
- * 获取案例列表API
+ * 获取案例列表API - 支持已登录和未登录用户
  * 支持分页、排序、标签过滤
- * 同时返回当前用户的点赞和收藏状态
+ * 已登录用户返回点赞和收藏状态
+ * 未登录用户从请求体中获取guestProfile来显示状态
  */
 export async function POST(req: NextRequest) {
   try {
-    const token = await getToken({
-      req,
-      cookieName,
-      secret: process?.env?.NEXTAUTH_SECRET,
-    });
+    console.log("📚 Cases list request received");
+    const body = await req.json();
     const {
       page = 1,
       pageSize = 12,
       sort = "latest",
       tags = [],
-    } = await req.json();
+      guestProfile, // 未登录用户的本地profile数据
+    } = body;
+
+    // 获取用户身份 (已登录或未登录)
+    const identity = await getUserIdentityFromBody(req, body, true);
+    
+    console.log(`👤 User identity: ${identity ? (identity.isGuest ? 'Guest' : 'Authenticated') : 'None'}`);
 
     await DBconnect();
 
@@ -61,9 +61,9 @@ export async function POST(req: NextRequest) {
       .limit(pageSize)
       .lean();
 
-    // 如果用户已登录,获取点赞和收藏状态
-    if (token?.email) {
-      // 过滤并转换有效的ObjectId
+    // 根据用户类型添加点赞和收藏状态
+    if (identity && !identity.isGuest) {
+      // 已登录用户 - 从数据库获取状态
       const recordIds = records
         .map((r) => r._id?.toString())
         .filter((id): id is string => {
@@ -72,25 +72,22 @@ export async function POST(req: NextRequest) {
         .map((id) => new mongoose.Types.ObjectId(id));
 
       if (recordIds.length > 0) {
-        // 获取当前用户的点赞和收藏记录
         const [likes, bookmarks] = await Promise.all([
           Like.find({
-            userId: token.email,
+            userId: identity.userId,
             recordId: { $in: recordIds },
           }).lean(),
           Bookmark.find({
-            userId: token.email,
+            userId: identity.userId,
             recordId: { $in: recordIds },
           }).lean(),
         ]);
 
-        // 创建点赞和收藏记录的Set用于快速查找
         const likedRecordIds = new Set(likes.map((l) => l.recordId.toString()));
         const bookmarkedRecordIds = new Set(
           bookmarks.map((b) => b.recordId.toString()),
         );
 
-        // 为每条记录添加点赞和收藏状态
         records.forEach((r: any) => {
           const id = r._id?.toString();
           if (id) {
@@ -99,11 +96,30 @@ export async function POST(req: NextRequest) {
           }
         });
       }
+    } else if (identity && identity.isGuest && guestProfile) {
+      // 未登录用户 - 从前端传来的guestProfile获取状态
+      const likedSet = new Set(guestProfile.likedRecords || []);
+      const bookmarkedSet = new Set(guestProfile.bookmarkedRecords || []);
+
+      records.forEach((r: any) => {
+        const id = r._id?.toString();
+        if (id) {
+          r.isLiked = likedSet.has(id);
+          r.isBookmarked = bookmarkedSet.has(id);
+        }
+      });
+    } else {
+      // 完全未认证的访客 - 默认状态为false
+      records.forEach((r: any) => {
+        r.isLiked = false;
+        r.isBookmarked = false;
+      });
     }
 
+    console.log(`✅ Returned ${records.length} cases`);
     return NextResponse.json({ cases: records });
   } catch (error) {
-    console.error("Error fetching cases:", error);
+    console.error("❌ Error fetching cases:", error);
     return NextResponse.json({ error: "获取案例列表失败" }, { status: 500 });
   }
 }

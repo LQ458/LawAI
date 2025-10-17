@@ -13,8 +13,24 @@ export interface Chat {
   _id: string;
   title: string;
   userId?: string;
+  guestId?: string; // 临时用户ID (未登录用户)
   time: string;
   messages: Message[];
+}
+
+// 临时用户标识接口
+export interface GuestIdentity {
+  guestId: string;
+  createdAt: number;
+  expiresAt?: number;
+}
+
+// 用户身份接口 (统一已登录和未登录用户)
+export interface UserIdentity {
+  userId?: string; // 已登录用户的真实ID
+  guestId?: string; // 未登录用户的临时ID
+  isGuest: boolean; // 是否为临时用户
+  identifier: string; // 统一标识符 (userId 或 guestId)
 }
 
 // 聊天组件属性接口
@@ -69,6 +85,27 @@ export interface IRecordWithUserState extends IRecord {
   isLiked: boolean;
   isBookmarked: boolean;
   score: number;
+}
+
+// 临时用户行为记录接口 (存储在localStorage)
+export interface GuestAction {
+  recordId: string;
+  action: 'view' | 'like' | 'bookmark';
+  timestamp: number;
+  duration?: number; // 浏览时长(秒)
+}
+
+export interface GuestProfile {
+  guestId: string;
+  actions: GuestAction[];
+  likedRecords: string[];
+  bookmarkedRecords: string[];
+  viewHistory: Array<{
+    recordId: string;
+    timestamp: number;
+    duration?: number;
+  }>;
+  createdAt: number;
 }
 
 export interface RecommendationResponse {
