@@ -6,12 +6,14 @@ import mongoose, { Schema, Document } from "mongoose";
  * @extends {Document}
  *
  * @property {string} userId - 用户邮箱，作为唯一标识
- * @property {mongoose.Types.ObjectId} recordId - 案例记录ID
+ * @property {mongoose.Types.ObjectId} recordId - 案例记录ID或文章ID
+ * @property {string} contentType - 内容类型："record" 或 "article"
  * @property {Date} createdAt - 点赞时间
  */
 export interface ILike extends Document {
   userId: string; // 使用email作为userId
   recordId: mongoose.Types.ObjectId;
+  contentType: "record" | "article";
   createdAt: Date;
 }
 
@@ -19,8 +21,9 @@ export interface ILike extends Document {
  * 点赞记录Schema
  * @description
  * 1. userId使用email作为唯一标识
- * 2. 创建复合索引确保每个用户只能对每个记录点赞一次
- * 3. 添加创建时间用于后续分析
+ * 2. 支持案例和文章的点赞
+ * 3. 创建复合索引确保每个用户只能对每个记录点赞一次
+ * 4. 添加创建时间用于后续分析
  */
 const likeSchema = new Schema<ILike>({
   userId: {
@@ -29,8 +32,12 @@ const likeSchema = new Schema<ILike>({
   },
   recordId: {
     type: Schema.Types.ObjectId,
-    ref: "Record",
     required: true,
+  },
+  contentType: {
+    type: String,
+    enum: ["record", "article"],
+    default: "record",
   },
   createdAt: {
     type: Date,

@@ -50,11 +50,20 @@ export const useChatState = ({ username }: UseChatStateProps) => {
           body: JSON.stringify({ chatId, username }),
         });
 
+        const data = await response.json();
+
         if (response.ok) {
           setChatLists((prev) => prev.filter((chat) => chat._id !== chatId));
           if (selectedChat?._id === chatId) {
             setSelectedChat(null);
           }
+          setChatInfo((prev) => {
+            const newInfo = { ...prev };
+            delete newInfo[chatId];
+            return newInfo;
+          });
+        } else {
+          console.error("Delete chat error:", data.error);
         }
       } catch (error) {
         console.error("Error deleting chat:", error);

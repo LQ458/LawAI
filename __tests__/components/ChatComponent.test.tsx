@@ -1,5 +1,5 @@
 import { render, screen, act } from "@testing-library/react";
-import ChatComponent from "@/app/components/ChatComponent";
+import ChatComponent from "@/components/ChatComponent";
 import { useSession } from "next-auth/react";
 
 jest.mock("next-auth/react", () => ({

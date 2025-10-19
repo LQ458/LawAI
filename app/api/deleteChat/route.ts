@@ -15,7 +15,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await User.findOne({ username });
+    // 检查chatId是否为空字符串（新建聊天的情况）
+    if (chatId === "" || chatId === "new") {
+      return NextResponse.json({ success: true, message: "No chat to delete" });
+    }
+
+    // 使用更灵活的用户查找方式，支持username和email
+    const user = await User.findOne({
+      $or: [
+        { username: username },
+        { email: username },
+        { name: username }
+      ]
+    });
+    
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
@@ -29,7 +42,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Chat not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: "Chat deleted successfully" });
   } catch (error) {
     console.error("Error deleting chat:", error);
     return NextResponse.json(

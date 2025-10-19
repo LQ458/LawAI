@@ -1,4 +1,16 @@
-import mongoose from "mongoose";
+import mongoose, { Schema, Document } from "mongoose";
+
+interface IUser extends Document {
+  username?: string;
+  password?: string;
+  originalPassword?: string;
+  email?: string;
+  name?: string;
+  admin: boolean;
+  image?: string;
+  provider: 'credentials' | 'google';
+  accounts: any[];
+}
 
 const accountSchema = new mongoose.Schema({
   provider: String,
@@ -6,13 +18,17 @@ const accountSchema = new mongoose.Schema({
   type: String,
 });
 
-const userSchema = new mongoose.Schema({
+const userSchema = new mongoose.Schema<IUser>({
   username: {
     type: String,
-    required: true,
+    required: function(this: IUser): boolean {
+      return this.provider === "credentials";
+    },
     unique: true,
+    sparse: true, // 允许多个null值
     validate: {
-      validator: function (v: string) {
+      validator: function (v: string): boolean {
+        if (!v) return true; // 如果没有值，跳过验证
         return /^[a-zA-Z0-9_]+$/.test(v);
       },
       message: "用户名只能包含字母、数字和下划线",
@@ -20,15 +36,26 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: function(this: IUser): boolean {
+      return this.provider === "credentials";
+    },
   },
   originalPassword: {
     type: String,
-    required: true,
+    required: function(this: IUser): boolean {
+      return this.provider === "credentials";
+    },
   },
   email: {
     type: String,
     unique: true,
+    sparse: true, // 允许多个null值
+  },
+  name: {
+    type: String,
+    required: function(this: IUser): boolean {
+      return this.provider === "google";
+    },
   },
   admin: {
     type: Boolean,
@@ -46,4 +73,4 @@ const userSchema = new mongoose.Schema({
   accounts: [accountSchema],
 });
 
-export default mongoose.models.User || mongoose.model("User", userSchema);
+export default mongoose.models.User || mongoose.model<IUser>("User", userSchema);

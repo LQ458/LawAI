@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { signIn } from "next-auth/react";
-import AuthForm from "@/app/components/AuthForm";
+import AuthForm from "@/components/AuthForm";
 import { Toast } from "primereact/toast";
 import type { ButtonProps } from "primereact/button";
 import type { InputTextProps } from "primereact/inputtext";
