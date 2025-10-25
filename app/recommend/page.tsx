@@ -85,9 +85,9 @@ export default function RecommendPage() {
           return;
         }
 
-        // 使用 pageSize 参数而不是 limit,设置合理的每页数量
+        // 简化请求 - 后端现在直接返回所有可用数据(最多100条)
         const response = await fetch(
-          `/api/recommend?page=1&pageSize=50&contentType=${type}&t=${Date.now()}`,
+          `/api/recommend?contentType=${type}&t=${Date.now()}`,
           {
             cache: forceRefresh ? "no-cache" : "force-cache",
             headers: {

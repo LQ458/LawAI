@@ -146,56 +146,37 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams;
     const contentType =
       searchParams.get("contentType") || CONFIG.CONTENT_TYPES.RECORD;
-    
-    // 分页参数
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const pageSize = Math.min(
-      CONFIG.RESULTS.MAX_PAGE_SIZE,
-      parseInt(searchParams.get("pageSize") || String(CONFIG.RESULTS.DEFAULT_PAGE_SIZE))
-    );
-    const skip = (page - 1) * pageSize;
 
     // 根据contentType选择集合
     const Collection =
       contentType === CONFIG.CONTENT_TYPES.RECORD ? Record : Article;
 
-    // 使用 lean() 提高性能,添加 limit 防止查询过多数据
-    const [recommendations, totalCount] = await Promise.all([
-      Collection.find()
-        .sort({ interactionScore: -1 })
-        .select({
-          _id: 1,
-          title: 1,
-          description: 1,
-          tags: 1,
-          category: 1,
-          views: 1,
-          likes: 1,
-          lastUpdateTime: 1,
-          interactionScore: 1,
-          ...(contentType === CONFIG.CONTENT_TYPES.ARTICLE && {
-            author: 1,
-            publishDate: 1,
-          }),
-        })
-        .skip(skip)
-        .limit(pageSize)
-        .lean() // 返回普通 JavaScript 对象,提高性能
-        .maxTimeMS(10000) // 10秒超时保护
-        .exec(),
-      Collection.countDocuments().maxTimeMS(5000) // 5秒超时
-    ]);
-
-    const totalPages = Math.ceil(totalCount / pageSize);
-    const hasMore = page < totalPages;
+    // 简化查询 - 限制返回数量但不使用复杂的分页
+    const recommendations = await Collection.find()
+      .sort({ interactionScore: -1 })
+      .limit(100) // 限制最多返回100条，避免过载
+      .select({
+        _id: 1,
+        title: 1,
+        description: 1,
+        tags: 1,
+        category: 1,
+        views: 1,
+        likes: 1,
+        lastUpdateTime: 1,
+        interactionScore: 1,
+        ...(contentType === CONFIG.CONTENT_TYPES.ARTICLE && {
+          author: 1,
+          publishDate: 1,
+        }),
+      })
+      .exec();
 
     return NextResponse.json({
       recommendations,
-      totalRecords: totalCount,
-      hasMore,
-      currentPage: page,
-      totalPages,
-      pageSize
+      totalRecords: recommendations.length,
+      hasMore: false,
+      currentPage: 1,
     });
   } catch (error) {
     console.error("Recommendation error:", error);
