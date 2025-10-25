@@ -13,10 +13,6 @@ const MONGODB_OPTIONS: ConnectOptions = {
   // 添加更稳定的连接选项
   heartbeatFrequencyMS: 30000,
   maxIdleTimeMS: 60000, // 增加最大空闲时间
-  // TLS/SSL 优化
-  tls: true,
-  tlsAllowInvalidCertificates: false,
-  tlsAllowInvalidHostnames: false,
 };
 
 let isConnected = false;
