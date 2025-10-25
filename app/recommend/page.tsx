@@ -13,6 +13,7 @@ import { Paginator } from "primereact/paginator";
 import Fuse from "fuse.js";
 import { debounce } from "lodash";
 import { SelectButton, SelectButtonChangeEvent } from "primereact/selectbutton";
+import { useGuest } from "@/hooks/useGuest";
 
 // Fuse.js 配置
 const fuseOptions = {
@@ -35,6 +36,7 @@ interface SelectButtonContext {
 export default function RecommendPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { guestId, guestProfile } = useGuest(); // 添加游客用户支持
   const toast = useRef<Toast>(null);
   const [recommendations, setRecommendations] = useState<
     IRecordWithUserState[]
@@ -85,16 +87,26 @@ export default function RecommendPage() {
           return;
         }
 
-        // 简化请求 - 后端现在直接返回所有可用数据(最多100条)
-        const response = await fetch(
-          `/api/recommend?contentType=${type}&t=${Date.now()}`,
-          {
-            cache: forceRefresh ? "no-cache" : "force-cache",
-            headers: {
-              "Content-Type": "application/json",
-            },
+        // 使用 POST 请求并包含用户状态信息
+        const requestBody: Record<string, unknown> = {
+          contentType: type,
+        };
+
+        // 如果是游客用户，添加 guestProfile
+        if (guestId && guestProfile) {
+          requestBody.guestId = guestId;
+          requestBody.guestProfile = guestProfile;
+        }
+
+        const response = await fetch(`/api/recommend`, {
+          method: "POST",
+          cache: forceRefresh ? "no-cache" : "force-cache",
+          headers: {
+            "Content-Type": "application/json",
+            ...(guestId && { "x-guest-id": guestId }),
           },
-        );
+          body: JSON.stringify(requestBody),
+        });
 
         if (!response.ok) {
           throw new Error((await response.text()) || "获取推荐失败");
