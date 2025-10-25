@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    console.log("✅ User found:", user._id);
-    const chats = await Chat.find({ userId: user._id }).sort({ time: -1 });
+    console.log("✅ User found:", user.email);
+    const chats = await Chat.find({ userId: user.email }).sort({ time: -1 });
     console.log("📊 Found chats:", chats.length);
 
     return NextResponse.json({ chats });

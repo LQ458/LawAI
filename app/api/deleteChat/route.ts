@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     const deletedChat = await Chat.findOneAndDelete({
       _id: chatId,
-      userId: user._id,
+      userId: user.email,
     });
 
     if (!deletedChat) {
