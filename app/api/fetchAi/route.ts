@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
         try {
           // 先检查是否已经存在相同标题的未完成聊天
           const existingChat = await Chat.findOne({
-            userId: user.email,
+            userId: user._id,
             title: message.substring(0, 20) + (message.length > 20 ? "..." : ""),
             "messages.length": 2,
           });
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
             const newChat = new Chat({
               title:
                 message.substring(0, 20) + (message.length > 20 ? "..." : ""),
-              userId: user.email,
+              userId: user._id,
               time: getCurrentTimeInLocalTimeZone(),
               messages: [
                 {
