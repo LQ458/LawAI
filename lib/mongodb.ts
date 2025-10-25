@@ -4,19 +4,14 @@ const MONGODB_OPTIONS: ConnectOptions = {
   bufferCommands: false, // 禁用缓冲以避免超时
   autoIndex: true,
   maxPoolSize: 10,
-  minPoolSize: 2, // 保持最小连接数,避免频繁创建连接
   serverSelectionTimeoutMS: 30000,
   socketTimeoutMS: 45000,
   connectTimeoutMS: 30000,
   retryWrites: true,
   retryReads: true,
   // 添加更稳定的连接选项
-  heartbeatFrequencyMS: 10000, // 更频繁的心跳检测(10秒)
-  maxIdleTimeMS: 60000, // 增加空闲超时到60秒
-  // SSL/TLS 相关优化
-  tls: true,
-  tlsAllowInvalidCertificates: false,
-  tlsAllowInvalidHostnames: false,
+  heartbeatFrequencyMS: 30000,
+  maxIdleTimeMS: 30000,
 };
 
 let isConnected = false;
@@ -103,12 +98,10 @@ export default async function DBconnect(): Promise<void> {
       console.error("MongoDB connection error:", err);
       isConnected = false;
       
-      // 如果是SSL/TLS错误,立即关闭并清除连接池
-      if (err.message.includes('SSL') || err.message.includes('TLS') || err.message.includes('ECONNRESET')) {
-        console.log("Network error detected, force closing connection pool...");
-        mongoose.connection.close(true).catch((closeErr) => {
-          console.error("Error closing connection:", closeErr);
-        });
+      // 如果是SSL/TLS错误,清除连接状态以允许重连
+      if (err.message.includes('SSL') || err.message.includes('TLS')) {
+        console.log("SSL/TLS error detected, clearing connection state...");
+        mongoose.connection.close().catch(() => {});
       }
     });
 

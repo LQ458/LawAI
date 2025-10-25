@@ -140,32 +140,8 @@ const CONFIG = {
  * 推荐API的GET处理函数
  */
 export async function GET(req: NextRequest) {
-  // 数据库连接重试逻辑
-  let retries = 3;
-  while (retries > 0) {
-    try {
-      await DBconnect();
-      break; // 连接成功,跳出循环
-    } catch (dbError) {
-      retries--;
-      console.error(`Database connection attempt failed. Retries left: ${retries}`, dbError);
-      
-      if (retries === 0) {
-        return NextResponse.json(
-          { 
-            error: "Database connection failed after multiple retries",
-            retryable: true 
-          },
-          { status: 503 }
-        );
-      }
-      
-      // 等待1秒后重试
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-
   try {
+    await DBconnect();
 
     const searchParams = req.nextUrl.searchParams;
     const contentType =
@@ -202,30 +178,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("Recommendation error:", error);
-    
-    // 检查是否是 MongoDB 连接错误
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const isMongoError = errorMessage.includes('Mongo') || 
-                         errorMessage.includes('SSL') || 
-                         errorMessage.includes('TLS') ||
-                         errorMessage.includes('ECONNRESET');
-    
-    if (isMongoError) {
-      console.error("MongoDB connection issue detected. Error details:", {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: errorMessage,
-        stack: error instanceof Error ? error.stack : 'No stack trace'
-      });
-      
-      return NextResponse.json(
-        { 
-          error: "Database connection issue, please try again later",
-          retryable: true 
-        },
-        { status: 503 }, // Service Unavailable
-      );
-    }
-    
     return NextResponse.json(
       { error: "Failed to get recommendations" },
       { status: 500 },
