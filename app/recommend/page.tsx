@@ -85,10 +85,11 @@ export default function RecommendPage() {
           return;
         }
 
+        // 使用 pageSize 参数而不是 limit,设置合理的每页数量
         const response = await fetch(
-          `/api/recommend?page=1&limit=9999&contentType=${type}&t=${Date.now()}`, // 添加时间戳避免缓存
+          `/api/recommend?page=1&pageSize=50&contentType=${type}&t=${Date.now()}`,
           {
-            cache: forceRefresh ? "no-cache" : "force-cache", // 根据forceRefresh决定缓存策略
+            cache: forceRefresh ? "no-cache" : "force-cache",
             headers: {
               "Content-Type": "application/json",
             },

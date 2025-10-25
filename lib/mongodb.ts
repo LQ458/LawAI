@@ -3,15 +3,20 @@ import mongoose, { ConnectOptions } from "mongoose";
 const MONGODB_OPTIONS: ConnectOptions = {
   bufferCommands: false, // 禁用缓冲以避免超时
   autoIndex: true,
-  maxPoolSize: 10,
+  maxPoolSize: 15, // 增加连接池大小以支持并发查询
+  minPoolSize: 5, // 维持最小连接数
   serverSelectionTimeoutMS: 30000,
-  socketTimeoutMS: 45000,
+  socketTimeoutMS: 60000, // 增加 socket 超时时间
   connectTimeoutMS: 30000,
   retryWrites: true,
   retryReads: true,
   // 添加更稳定的连接选项
   heartbeatFrequencyMS: 30000,
-  maxIdleTimeMS: 30000,
+  maxIdleTimeMS: 60000, // 增加最大空闲时间
+  // TLS/SSL 优化
+  tls: true,
+  tlsAllowInvalidCertificates: false,
+  tlsAllowInvalidHostnames: false,
 };
 
 let isConnected = false;
