@@ -271,9 +271,10 @@ export default function Home() {
   const [showScrollButton, setShowScrollButton] = useState(true);
 
   // 使用自定义hook管理认证状态
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, guestId } = useAuth();
 
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showAuthDialog, setShowAuthDialog] = useState(false); // 控制登录对话框显示
   const isMobile = useResponsive(); // 使用自定义hook
 
   /**
@@ -398,13 +399,21 @@ export default function Home() {
         });
 
         // 发送 POST 请求
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        
+        // 如果是游客用户,添加 guest ID header
+        if (guestId && !isAuthenticated) {
+          headers["x-guest-id"] = guestId;
+        }
+
         const response = await fetch("/api/fetchAi", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers,
           body: JSON.stringify({
-            username: session?.user?.name,
+            username: session?.user?.name || undefined,
+            guestId: guestId || undefined,
             chatId: selectedChat._id.toString(),
             message: currentMessage,
           }),
@@ -572,7 +581,7 @@ export default function Home() {
         setIsSending(false);
       }
     },
-    [message, selectedChat, session?.user?.name, updateChatInfo, setChatLists, setIsSending, setMessage, setSelectedChat],
+    [message, selectedChat, session?.user?.name, guestId, isAuthenticated, updateChatInfo, setChatLists, setIsSending, setMessage, setSelectedChat],
   );
 
   // 添加删除确认对话框
@@ -652,15 +661,40 @@ export default function Home() {
 
   // 添加 useEffect 来控制初始化
   useEffect(() => {
-    if (isAuthenticated && !isLoading) {
+    // 无论是认证用户还是游客都可以初始化
+    if (!isLoading) {
       setInitChat(true);
-      fetchChats();
+      // 只有认证用户才从服务器获取聊天记录
+      if (isAuthenticated) {
+        fetchChats();
+      }
+      // 游客用户的聊天记录由 useGuest hook 从 localStorage 加载
     }
   }, [isAuthenticated, isLoading, fetchChats]);
 
   // 侧边栏内容
   const sidebarContent = (
     <div className="flex flex-col w-full h-full p-4">
+      {/* 游客用户登录提示 */}
+      {!isAuthenticated && !isLoading && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <i className="pi pi-info-circle text-blue-600"></i>
+            <span className="text-sm font-medium text-blue-900">游客模式</span>
+          </div>
+          <p className="text-xs text-blue-700 mb-2">
+            您当前以游客身份使用,数据仅保存在本地浏览器中
+          </p>
+          <Button
+            label="登录以同步数据"
+            size="small"
+            className="w-full"
+            severity="info"
+            onClick={() => setShowAuthDialog(true)}
+          />
+        </div>
+      )}
+      
       <ChatHeader
         onNewChat={createNewChat}
         onRefresh={fetchChats}
@@ -800,17 +834,25 @@ export default function Home() {
     <div className="chat-layout">
       <Toast ref={toast} />
       <ConfirmDialog />
+      
+      {/* 可选的登录对话框 - 仅在用户主动点击时显示 */}
       <Dialog
-        visible={!isAuthenticated && !isLoading}
-        onHide={() => {}}
+        visible={showAuthDialog}
+        onHide={() => setShowAuthDialog(false)}
+        header="登录/注册"
+        dismissableMask
         content={() => (
           <AuthForm
             toast={toast}
             setInitChat={setInitChat}
-            onSuccess={() => fetchChats()}
+            onSuccess={() => {
+              fetchChats();
+              setShowAuthDialog(false);
+            }}
           />
         )}
       />
+      
       {isMobile ? (
         <MobileLayout
           sidebar={sidebarContent}
