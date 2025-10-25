@@ -150,7 +150,7 @@ export default function RecommendPage() {
         setPageLoading(false);
       }
     },
-    [contentType],
+    [contentType, recordsCache],
   );
 
   // 修改点赞和收藏处理函数
@@ -433,7 +433,7 @@ export default function RecommendPage() {
       .filter((record): record is IRecordWithUserState =>
         Boolean(record && record._id),
       );
-  }, [filteredRecords, recommendations, first, rows, searchQuery, totalRecords]);
+  }, [filteredRecords, recommendations, first, rows, searchQuery]);
 
   // 修改事件处理函数类型
   const handleRetry = () => {
@@ -474,7 +474,7 @@ export default function RecommendPage() {
       setRecordsCache({ record: [], article: [] });
       fetchRecommendations(contentType, true);
     }
-  }, [status, contentType]);
+  }, [status, contentType, fetchRecommendations]);
 
   // 处理加载状态 - 移除session loading检查，直接加载内容
   // if (status === "loading") {

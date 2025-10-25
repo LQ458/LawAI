@@ -60,7 +60,7 @@ export async function getUserIdentity(
  */
 export async function getUserIdentityFromBody(
   req: NextRequest,
-  body: any,
+  body: Record<string, unknown>,
   allowGuest: boolean = true
 ): Promise<UserIdentity | null> {
   // 先尝试获取已登录用户
@@ -71,7 +71,7 @@ export async function getUserIdentityFromBody(
   }
 
   // 如果允许临时用户且请求体包含guestId
-  if (allowGuest && body.guestId && body.guestId.startsWith('guest_')) {
+  if (allowGuest && body.guestId && typeof body.guestId === 'string' && body.guestId.startsWith('guest_')) {
     return {
       guestId: body.guestId,
       isGuest: true,

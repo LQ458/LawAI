@@ -7,6 +7,7 @@ import { ZhipuAI } from "zhipuai-sdk-nodejs-v4";
 import { MessageOptions, Message } from "@/types";
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 import { getUserIdentityFromBody } from "@/lib/authUtils";
+import { Document } from "mongoose";
 
 // 定义临时聊天类型
 interface TempChat {
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     });
     
     let sessionId = chatId;
-    let chat: any; // 可以是Mongoose Document或TempChat
+    let chat: TempChat | (Document & { messages: Message[] }) | null = null; // 明确类型
     let newChatCreated = false;
     let isGuestMode = false;
 
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
             chat = existingChat;
             sessionId = existingChat._id.toString();
           } else {
-            chat = new Chat({
+            const newChat = new Chat({
               title:
                 message.substring(0, 20) + (message.length > 20 ? "..." : ""),
               userId: user._id,
@@ -136,8 +137,9 @@ export async function POST(req: NextRequest) {
                 { role: "user" as const, content: message, timestamp: new Date() },
               ],
             });
-            await chat.save();
-            sessionId = chat._id.toString();
+            await newChat.save();
+            chat = newChat;
+            sessionId = newChat._id.toString();
             newChatCreated = true;
           }
         } catch (error) {
@@ -145,17 +147,18 @@ export async function POST(req: NextRequest) {
           throw error;
         }
       } else {
-        chat = await Chat.findById(sessionId);
-        if (!chat) {
+        const existingChat = await Chat.findById(sessionId);
+        if (!existingChat) {
           return NextResponse.json({ error: "Chat not found" }, { status: 404 });
         }
         // 添加用户消息到现有聊天
-        chat.messages.push({
+        existingChat.messages.push({
           role: "user" as const,
           content: message,
           timestamp: new Date(),
         });
-        await chat.save();
+        await existingChat.save();
+        chat = existingChat;
       }
     }
     // 创建流式响应
@@ -218,7 +221,7 @@ export async function POST(req: NextRequest) {
             // 临时用户模式 - 通过响应头返回完整聊天数据供前端保存
             if (isGuestMode) {
               chat.messages.push(assistantMessage);
-              chat.time = getCurrentTimeInLocalTimeZone();
+              (chat as TempChat).time = getCurrentTimeInLocalTimeZone();
               // 将完整的chat对象编码到响应头中
               controller.enqueue(
                 new TextEncoder().encode(
@@ -233,7 +236,7 @@ export async function POST(req: NextRequest) {
               // 已登录用户 - 保存到数据库
               if ('save' in chat && typeof chat.save === 'function') {
                 chat.messages.push(assistantMessage);
-                chat.time = getCurrentTimeInLocalTimeZone();
+                (chat as unknown as Document & { time: string }).time = getCurrentTimeInLocalTimeZone();
                 await chat.save();
               }
             }
@@ -248,19 +251,19 @@ export async function POST(req: NextRequest) {
           if (!isGuestMode && 'save' in chat) {
             if (newChatCreated) {
               try {
-                await Chat.findByIdAndDelete(chat._id);
-                console.log("Deleted new chat due to error:", chat._id);
+                await Chat.findByIdAndDelete((chat as Document & { _id: unknown })._id);
+                console.log("Deleted new chat due to error:", (chat as Document & { _id: unknown })._id);
               } catch (deleteError) {
                 console.error("Error deleting chat:", deleteError);
               }
             } else if (chat && chat.messages.length > 1) {
-              // 如果是现有聊天，只删除最后一条消息
+              // 如果是现有聊天,只删除最后一条消息
               chat.messages.pop();
-              chat.time = getCurrentTimeInLocalTimeZone();
+              (chat as unknown as Document & { time: string }).time = getCurrentTimeInLocalTimeZone();
               if (typeof chat.save === 'function') {
                 await chat.save();
               }
-              console.log("Removed last message from chat:", chat._id);
+              console.log("Removed last message from chat:", (chat as Document & { _id: unknown })._id);
             }
           }
           
@@ -270,13 +273,17 @@ export async function POST(req: NextRequest) {
     });
 
     // 返回流式响应
+    const chatTitle = isGuestMode 
+      ? (chat as TempChat).title 
+      : (chat as unknown as Document & { title: string }).title;
+    
     return new Response(stream, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
         "X-Session-Id": sessionId,
-        "X-Chat-Title": encodeURIComponent(chat.title),
+        "X-Chat-Title": encodeURIComponent(chatTitle),
         "X-Is-Guest": isGuestMode ? "true" : "false",
       },
     });

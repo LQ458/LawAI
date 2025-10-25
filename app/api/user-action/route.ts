@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   try {
     console.log("📊 User action tracking request received");
     const body = await request.json();
-    const { action, recordId, duration, guestId } = body;
+    const { action, recordId, duration } = body;
 
     // 获取用户身份
     const identity = await getUserIdentityFromBody(request, body, true);

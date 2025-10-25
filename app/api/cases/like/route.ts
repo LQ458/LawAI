@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   try {
     console.log("👍 Like API request received");
     const body = await req.json();
-    const { recordId, contentType = "record", guestId } = body;
+    const { recordId, contentType = "record" } = body;
 
     // 获取用户身份
     const identity = await getUserIdentityFromBody(req, body, true);

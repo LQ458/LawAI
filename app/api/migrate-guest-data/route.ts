@@ -7,7 +7,7 @@ import { UserProfile } from "@/models/userProfile";
 import { Record } from "@/models/record";
 import mongoose from "mongoose";
 import { getUserIdentityFromBody } from "@/lib/authUtils";
-import { GuestProfile } from "@/types";
+
 
 /**
  * 临时用户数据迁移API
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     session.startTransaction();
 
     try {
-      let migratedCount = {
+      const migratedCount = {
         chats: 0,
         likes: 0,
         bookmarks: 0,

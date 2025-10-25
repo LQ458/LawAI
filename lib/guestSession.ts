@@ -174,15 +174,15 @@ export function removeGuestAction(
 /**
  * 获取临时用户的聊天记录
  */
-export function getGuestChats(guestId: string): any[] {
+export function getGuestChats(guestId: string): Array<Record<string, unknown>> {
   if (typeof window === 'undefined') return [];
   
   const stored = localStorage.getItem(GUEST_CHATS_KEY);
   
   if (stored) {
     try {
-      const chats = JSON.parse(stored);
-      return chats.filter((chat: any) => chat.guestId === guestId);
+      const chats = JSON.parse(stored) as Array<Record<string, unknown>>;
+      return chats.filter((chat) => chat.guestId === guestId);
     } catch (error) {
       console.error('Failed to parse guest chats:', error);
     }
@@ -194,15 +194,15 @@ export function getGuestChats(guestId: string): any[] {
 /**
  * 保存临时用户的聊天记录
  */
-export function saveGuestChat(guestId: string, chat: any): void {
+export function saveGuestChat(guestId: string, chat: Record<string, unknown>): void {
   if (typeof window === 'undefined') return;
   
   const stored = localStorage.getItem(GUEST_CHATS_KEY);
-  let chats: any[] = [];
+  let chats: Array<Record<string, unknown>> = [];
   
   if (stored) {
     try {
-      chats = JSON.parse(stored);
+      chats = JSON.parse(stored) as Array<Record<string, unknown>>;
     } catch (error) {
       console.error('Failed to parse guest chats:', error);
     }
@@ -212,7 +212,7 @@ export function saveGuestChat(guestId: string, chat: any): void {
   chat.guestId = guestId;
   
   // 查找是否已存在
-  const index = chats.findIndex((c: any) => c._id === chat._id);
+  const index = chats.findIndex((c) => c._id === chat._id);
   
   if (index >= 0) {
     chats[index] = chat;
@@ -233,8 +233,8 @@ export function deleteGuestChat(guestId: string, chatId: string): void {
   
   if (stored) {
     try {
-      let chats = JSON.parse(stored);
-      chats = chats.filter((chat: any) => 
+      let chats = JSON.parse(stored) as Array<Record<string, unknown>>;
+      chats = chats.filter((chat) => 
         !(chat._id === chatId && chat.guestId === guestId)
       );
       localStorage.setItem(GUEST_CHATS_KEY, JSON.stringify(chats));
@@ -258,8 +258,8 @@ export function updateGuestChatTitle(
   
   if (stored) {
     try {
-      const chats = JSON.parse(stored);
-      const chat = chats.find((c: any) => 
+      const chats = JSON.parse(stored) as Array<Record<string, unknown>>;
+      const chat = chats.find((c) => 
         c._id === chatId && c.guestId === guestId
       );
       
@@ -279,7 +279,7 @@ export function updateGuestChatTitle(
 export function getAllGuestData(guestId: string): {
   identity: GuestIdentity | null;
   profile: GuestProfile;
-  chats: any[];
+  chats: Array<Record<string, unknown>>;
 } {
   if (typeof window === 'undefined') {
     return {
@@ -290,7 +290,7 @@ export function getAllGuestData(guestId: string): {
   }
 
   return {
-    identity: JSON.parse(localStorage.getItem(GUEST_ID_KEY) || 'null'),
+    identity: JSON.parse(localStorage.getItem(GUEST_ID_KEY) || 'null') as GuestIdentity | null,
     profile: getGuestProfile(guestId),
     chats: getGuestChats(guestId),
   };

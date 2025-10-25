@@ -24,14 +24,14 @@ interface UseGuestReturn {
   isGuest: boolean;
   guestId: string | null;
   guestProfile: GuestProfile | null;
-  guestChats: any[];
+  guestChats: Array<Record<string, unknown>>;
   
   // 行为记录
   recordAction: (recordId: string, action: 'view' | 'like' | 'bookmark', duration?: number) => void;
   removeAction: (recordId: string, actionType: 'like' | 'bookmark') => void;
   
   // 聊天管理
-  saveChat: (chat: any) => void;
+  saveChat: (chat: Record<string, unknown>) => void;
   deleteChat: (chatId: string) => void;
   updateChatTitle: (chatId: string, title: string) => void;
   
@@ -46,7 +46,7 @@ export function useGuest(): UseGuestReturn {
   const { data: session, status } = useSession();
   const [guestIdentity, setGuestIdentity] = useState<GuestIdentity | null>(null);
   const [guestProfile, setGuestProfile] = useState<GuestProfile | null>(null);
-  const [guestChats, setGuestChats] = useState<any[]>([]);
+  const [guestChats, setGuestChats] = useState<Array<Record<string, unknown>>>([]);
 
   const isGuest = status === 'unauthenticated';
 
@@ -110,7 +110,7 @@ export function useGuest(): UseGuestReturn {
   }, [guestIdentity]);
 
   // 保存聊天
-  const saveChat = useCallback((chat: any) => {
+  const saveChat = useCallback((chat: Record<string, unknown>) => {
     if (!guestIdentity) return;
 
     saveGuestChat(guestIdentity.guestId, chat);
