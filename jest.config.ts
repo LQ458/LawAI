@@ -12,6 +12,7 @@ const customJestConfig: Config = {
     "^@/components/(.*)$": "<rootDir>/components/$1",
     "^@/app/(.*)$": "<rootDir>/app/$1",
     "^@/lib/(.*)$": "<rootDir>/lib/$1",
+    "^@/models/(.*)$": "<rootDir>/models/$1",
   },
   collectCoverageFrom: [
     "components/**/*.{ts,tsx}",

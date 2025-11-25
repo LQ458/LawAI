@@ -38,11 +38,11 @@ const UseTour = (steps: DriveStep[], status: string) => {
     // 从 localStorage 中获取是否显示引导的标志
     const showTour = localStorage.getItem("showTour") === "true";
 
-    // 如果标志为 true 且用户已认证，则启动引导
-    if (showTour && status === "authenticated") {
+    // 如果标志为 true 且状态已确定（已登录或未登录，排除 loading 状态），则启动引导
+    if (showTour && (status === "authenticated" || status === "unauthenticated")) {
       // 增加延迟，确保 DOM 完全加载后再启动引导
       setTimeout(() => {
-        console.log("Starting tour...");
+        console.log("Starting tour for", status, "user...");
         try {
           driverObj.current.drive(); // 启动引导
           localStorage.removeItem("showTour"); // 清除标志，避免重复显示
