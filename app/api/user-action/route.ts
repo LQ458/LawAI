@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { auth0 } from "@/lib/auth0";
 import { Record } from "@/models/record";
 import { UserProfile } from "@/models/userProfile";
 import DBconnect from "@/lib/mongodb";
@@ -8,8 +8,9 @@ export async function POST(request: NextRequest) {
   try {
     await DBconnect();
 
-    const token = await getToken({ req: request });
-    if (!token?.email) {
+    const session = await auth0.getSession();
+    const userSub = session?.user?.sub;
+    if (!userSub) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -21,13 +22,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    // 更新记录的交互分数
     let interactionScore = record.interactionScore || 0;
     const weights = {
       view: 1,
       like: 3,
       bookmark: 5,
-      duration: 0.1, // 每秒的权重
+      duration: 0.1,
     };
 
     switch (action) {
@@ -45,17 +45,15 @@ export async function POST(request: NextRequest) {
         break;
     }
 
-    // 更新记录的交互分数
     await Record.findByIdAndUpdate(recordId, {
       interactionScore,
       $inc: { views: action === "view" ? 1 : 0 },
     });
 
-    // 更新用户画像
-    let userProfile = await UserProfile.findOne({ userId: token.email });
+    let userProfile = await UserProfile.findOne({ userId: userSub });
     if (!userProfile) {
       userProfile = new UserProfile({
-        userId: token.email,
+        userId: userSub,
         tagWeights: {},
         categoryWeights: {},
         interactions: {
@@ -67,12 +65,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 更新标签权重
     record.tags.forEach((tag: string) => {
       userProfile.tagWeights[tag] = (userProfile.tagWeights[tag] || 0) + 1;
     });
 
-    // 更新交互统计
     const interactions = userProfile.interactions;
     switch (action) {
       case "view":

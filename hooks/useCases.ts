@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSession } from "next-auth/react";
+import { useUser } from "@auth0/nextjs-auth0/client";
 
 const PAGE_SIZE = 12;
 
-// 明确定义类型
 export interface Case {
   _id: string;
   title: string;
@@ -20,17 +19,8 @@ export interface Case {
 
 export type SortOption = "latest" | "popular" | "recommended";
 
-/**
- * 案例状态管理Hook
- * @description
- * 管理案例列表、点赞、收藏等状态，实现：
- * 1. 本地状态持久化
- * 2. 服务器状态同步
- * 3. 乐观更新UI
- * 4. 错误处理和回滚
- */
 export function useCases() {
-  const { data: session } = useSession();
+  const { user } = useUser();
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -39,27 +29,21 @@ export function useCases() {
   const [sortOption, setSortOption] = useState<SortOption>("latest");
   const [filterTags, setFilterTags] = useState<string[]>([]);
 
-  // 状态缓存
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set<string>());
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(
     new Set<string>(),
   );
 
-  // 用于存储操作队列的ref
   const operationQueue = useRef<
     Array<{ type: "like" | "bookmark"; id: string; action: boolean }>
   >([]);
 
-  /**
-   * 保存状态到localStorage
-   * 实现状态持久化，确保刷新后状态不丢失
-   */
   const saveToLocalStorage = useCallback(
     (type: "liked" | "bookmarked", ids: Set<string>) => {
-      if (session?.user?.email) {
+      if (user?.sub) {
         try {
           localStorage.setItem(
-            `${type}Ids_${session.user.email}`,
+            `${type}Ids_${user.sub}`,
             JSON.stringify(Array.from(ids)),
           );
         } catch (error) {
@@ -67,24 +51,20 @@ export function useCases() {
         }
       }
     },
-    [session?.user?.email],
+    [user?.sub],
   );
 
-  /**
-   * 从localStorage恢复状态
-   * 确保用户登录后立即恢复之前的状态
-   */
   useEffect(() => {
     let mounted = true;
 
     const restoreState = () => {
-      if (session?.user?.email && mounted) {
+      if (user?.sub && mounted) {
         try {
           const storedLikedIds = localStorage.getItem(
-            `likedIds_${session.user.email}`,
+            `likedIds_${user.sub}`,
           );
           const storedBookmarkedIds = localStorage.getItem(
-            `bookmarkedIds_${session.user.email}`,
+            `bookmarkedIds_${user.sub}`,
           );
 
           if (storedLikedIds) {
@@ -104,12 +84,8 @@ export function useCases() {
     return () => {
       mounted = false;
     };
-  }, [session?.user?.email]);
+  }, [user?.sub]);
 
-  /**
-   * 同步服务器状态
-   * 处理队列中的操作，确保状态同步
-   */
   const syncServerState = useCallback(async () => {
     if (operationQueue.current.length === 0) return;
 
@@ -129,7 +105,6 @@ export function useCases() {
           throw new Error(`Failed to sync ${op.type} state`);
         }
 
-        // 更新本地状态
         if (op.type === "like") {
           setLikedIds((prev) => {
             const newIds = new Set(prev);
@@ -147,25 +122,19 @@ export function useCases() {
         }
       } catch (error) {
         console.error(`Error syncing ${op.type} state:`, error);
-        // 将失败的操作重新加入队列
         operationQueue.current.push(op);
       }
     }
   }, [saveToLocalStorage]);
 
-  // 定期同步状态
   useEffect(() => {
     const intervalId = setInterval(syncServerState, 5000);
     return () => clearInterval(intervalId);
   }, [syncServerState]);
 
-  /**
-   * 处理点赞操作
-   * 实现乐观更新和错误回滚
-   */
   const handleLike = useCallback(
     async (recordId: string) => {
-      if (!session) {
+      if (!user) {
         throw new Error("请先登录");
       }
 
@@ -173,7 +142,6 @@ export function useCases() {
       const optimisticUpdate = !isCurrentlyLiked;
 
       try {
-        // 乐观更新UI
         setLikedIds((prev: Set<string>) => {
           const newIds: Set<string> = new Set(prev);
           optimisticUpdate ? newIds.add(recordId) : newIds.delete(recordId);
@@ -181,7 +149,6 @@ export function useCases() {
           return newIds;
         });
 
-        // 更新案例列表
         setCases((prev) =>
           prev.map((c) =>
             c._id === recordId
@@ -194,7 +161,6 @@ export function useCases() {
           ),
         );
 
-        // 添加到操作队列
         operationQueue.current.push({
           type: "like",
           id: recordId,
@@ -204,7 +170,6 @@ export function useCases() {
         return { liked: optimisticUpdate };
       } catch (error) {
         console.error("Like error:", error);
-        // 错误回滚
         setLikedIds((prev: Set<string>) => {
           const newIds: Set<string> = new Set(prev);
           isCurrentlyLiked ? newIds.add(recordId) : newIds.delete(recordId);
@@ -214,16 +179,12 @@ export function useCases() {
         throw error;
       }
     },
-    [session, likedIds, saveToLocalStorage],
+    [user, likedIds, saveToLocalStorage],
   );
 
-  /**
-   * 处理收藏操作
-   * 实现乐观更新和错误回滚
-   */
   const handleBookmark = useCallback(
     async (recordId: string) => {
-      if (!session) {
+      if (!user) {
         throw new Error("请先登录");
       }
 
@@ -231,7 +192,6 @@ export function useCases() {
       const optimisticUpdate = !isCurrentlyBookmarked;
 
       try {
-        // 乐观更新UI
         setBookmarkedIds((prev: Set<string>) => {
           const newIds: Set<string> = new Set(prev);
           optimisticUpdate ? newIds.add(recordId) : newIds.delete(recordId);
@@ -239,14 +199,12 @@ export function useCases() {
           return newIds;
         });
 
-        // 更新案例列表
         setCases((prev) =>
           prev.map((c) =>
             c._id === recordId ? { ...c, isBookmarked: optimisticUpdate } : c,
           ),
         );
 
-        // 添加到操作队列
         operationQueue.current.push({
           type: "bookmark",
           id: recordId,
@@ -256,7 +214,6 @@ export function useCases() {
         return { bookmarked: optimisticUpdate };
       } catch (error) {
         console.error("Bookmark error:", error);
-        // 错误回滚
         setBookmarkedIds((prev: Set<string>) => {
           const newIds: Set<string> = new Set(prev);
           isCurrentlyBookmarked
@@ -268,13 +225,9 @@ export function useCases() {
         throw error;
       }
     },
-    [session, bookmarkedIds, saveToLocalStorage],
+    [user, bookmarkedIds, saveToLocalStorage],
   );
 
-  /**
-   * 获取案例列表
-   * 同时更新本地状态缓存
-   */
   const fetchCases = useCallback(async () => {
     try {
       setLoading(true);
@@ -297,9 +250,7 @@ export function useCases() {
 
       const data = await response.json();
 
-      // 更新状态缓存
-      if (session?.user?.email) {
-        // 明确指定类型
+      if (user?.sub) {
         const newLikedIds: Set<string> = new Set(
           data.cases
             .filter((c: Case) => c.isLiked)
@@ -334,9 +285,8 @@ export function useCases() {
     } finally {
       setLoading(false);
     }
-  }, [page, sortOption, filterTags, session?.user?.email, saveToLocalStorage]);
+  }, [page, sortOption, filterTags, user?.sub, saveToLocalStorage]);
 
-  // 重置列表
   useEffect(() => {
     let mounted = true;
 
@@ -351,7 +301,6 @@ export function useCases() {
     };
   }, [sortOption, filterTags]);
 
-  // 加载数据
   useEffect(() => {
     let mounted = true;
 

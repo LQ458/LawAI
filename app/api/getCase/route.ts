@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import DBconnect from "@/lib/mongodb";
 import { Record } from "@/models/record";
-import { ZhipuAI } from "zhipuai-sdk-nodejs-v4";
+import OpenAI from "openai";
 
-// 定义Record的接口
 interface IRecord {
   title: string;
   link: string;
@@ -11,16 +10,6 @@ interface IRecord {
   content: string;
 }
 
-// 定义AI响应的接口
-interface AIResponse {
-  choices: Array<{
-    message: {
-      content: string;
-    };
-  }>;
-}
-
-// Function to escape special characters in a string for use in a regular expression
 function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -37,8 +26,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    //const keywords = nodejieba.cut(searchString, true);
-    // Build the $or query with regex for each keyword
     const keywords = searchString.split("");
     const regexQueries = keywords.map((keyword: string) => ({
       $or: [
@@ -50,28 +37,30 @@ export async function GET(req: NextRequest) {
 
     const cases = await Record.find({ $or: regexQueries }).limit(5);
 
-    // Map only title and link, excluding description from the response
     const recordDetails = cases.map((r: IRecord) => ({
       title: r.title,
-      link: r.link, // Include only title and link in the response
+      link: r.link,
     }));
     const recordDetailsForAI = cases.map((c: IRecord) => ({
-      title: c.title, // Include only title for the AI message
+      title: c.title,
     }));
 
-    const ai = new ZhipuAI({ apiKey: process.env.AI_API_KEY! });
+    const deepseek = new OpenAI({
+      baseURL: "https://api.deepseek.com",
+      apiKey: process.env.DEEPSEEK_API_KEY!,
+    });
+
     const aiMessageContent = `以下是5个事例: ${recordDetailsForAI.map((detail) => `标题: ${detail.title}`).join(";")}。这是用户的问题: "${searchString}"。请在100字内解释这五个事例是如何解答用户的问题的`;
     console.log("aiMessageContent:" + aiMessageContent);
-    const aiResponse = (await ai.createCompletions({
-      model: process.env.AI_MODEL || "glm-4-flashx",
+
+    const aiResponse = await deepseek.chat.completions.create({
+      model: process.env.AI_MODEL || "deepseek-chat",
       messages: [
         { role: "system", content: "请根据以下内容，" },
-        {
-          role: "user",
-          content: aiMessageContent,
-        },
+        { role: "user", content: aiMessageContent },
       ],
-    })) as AIResponse;
+    });
+
     console.log("content:" + aiResponse.choices[0].message.content);
     const aiMessage =
       aiResponse.choices?.[0]?.message?.content || "No response from AI";

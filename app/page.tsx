@@ -11,14 +11,14 @@ import { Divider } from "primereact/divider";
 import { Button } from "primereact/button";
 import ChatComponent from "@/components/ChatComponent";
 import { Toast } from "primereact/toast";
-import { useSession } from "next-auth/react";
+import { useUser } from "@auth0/nextjs-auth0/client";
 import { Dialog } from "primereact/dialog";
 import { InputTextarea } from "primereact/inputtextarea";
 import { Chat, Message, MessageRole } from "@/types";
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
 import AuthForm from "@/components/AuthForm";
-import { useRouter } from "next/navigation";
+import SummaryDialog from "@/components/SummaryDialog";
 import { DriveStep } from "driver.js";
 import UseTour from "@/hooks/useTour";
 import UseObChatList from "@/hooks/useObChatList";
@@ -74,12 +74,10 @@ const steps: DriveStep[] = [
   },
 ];
 
-// 添加一个工具函数来计算实际对话数量
 const getActualMessageCount = (messages: Message[] = []) => {
   return messages.filter((msg) => msg.role !== "system").length;
 };
 
-// 修改 LoadingMessage 组件
 const LoadingMessage = () => (
   <div className="flex gap-3 px-4 py-2">
     <Skeleton
@@ -101,7 +99,6 @@ const LoadingMessage = () => (
   </div>
 );
 
-// 优化响应式标题组件
 const ResponsiveTitle = () => {
   const [titleRef, setTitleRef] = useState<HTMLDivElement | null>(null);
   const [showFullTitle, setShowFullTitle] = useState(true);
@@ -111,7 +108,7 @@ const ResponsiveTitle = () => {
 
     const observer = new ResizeObserver((entries) => {
       const width = entries[0].contentRect.width;
-      setShowFullTitle(width >= 200); // 根据实际测试调整阈值
+      setShowFullTitle(width >= 200);
     });
 
     observer.observe(titleRef);
@@ -148,7 +145,6 @@ const ResponsiveTitle = () => {
   );
 };
 
-// 优化移动端布局组件
 const MobileLayout = ({
   children,
   sidebar,
@@ -200,7 +196,6 @@ const MobileLayout = ({
   );
 };
 
-// 创建一个自定义 hook 来处理响应式
 const useResponsive = () => {
   const [isMobile, setIsMobile] = useState(false);
 
@@ -209,13 +204,8 @@ const useResponsive = () => {
       setIsMobile(window.innerWidth <= 640);
     };
 
-    // 初始检查
     checkMobile();
-
-    // 添加resize监听
     window.addEventListener("resize", checkMobile);
-
-    // 清理
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
@@ -223,11 +213,9 @@ const useResponsive = () => {
 };
 
 export default function Home() {
-  const router = useRouter();
-  const { data: session } = useSession();
+  const { user: auth0User } = useUser();
   const toast = useRef<Toast>(null);
 
-  // 使用抽离的状态管理hooks
   const {
     chatLists,
     setChatLists,
@@ -238,7 +226,7 @@ export default function Home() {
     createNewChat,
     deleteChat,
   } = useChatState({
-    username: session?.user?.name || "",
+    userId: auth0User?.sub || "",
   });
 
   const {
@@ -253,13 +241,12 @@ export default function Home() {
     handleKeyDown,
   } = useMessageState();
 
-  const [initChat, setInitChat] = useState(false); // 是否初始化聊天
-  const [isInitialScrollRef, setIsInitialScrollRef] = useState(true); // 是否为初始滚动
+  const [initChat, setInitChat] = useState(false);
+  const [isInitialScrollRef, setIsInitialScrollRef] = useState(true);
 
   const chatRef = useRef<HTMLFormElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 使用滚动管理器
   const { scrollToBottom } = useScrollManager({
     smoothScroll: true,
     debounceMs: 100,
@@ -267,18 +254,14 @@ export default function Home() {
 
   useEffect(() => {}, [initChat]);
 
-  // 添加状态
   const [showScrollButton, setShowScrollButton] = useState(true);
 
-  // 使用自定义hook管理认证状态
   const { isAuthenticated, isLoading } = useAuth();
 
   const [showSidebar, setShowSidebar] = useState(false);
-  const isMobile = useResponsive(); // 使用自定义hook
+  const [showSummary, setShowSummary] = useState(false);
+  const isMobile = useResponsive();
 
-  /**
-   * 初始滚动
-   */
   useEffect(() => {
     if (isInitialScrollRef && markdownRendered && chatEndRef.current) {
       setIsInitialScrollRef(false);
@@ -286,29 +269,27 @@ export default function Home() {
     }
   }, [markdownRendered, isInitialScrollRef, scrollToBottom]);
 
-  UseTour(steps, isAuthenticated ? "authenticated" : "unauthenticated"); // 添加用户引导
+  UseTour(steps, isAuthenticated ? "authenticated" : "unauthenticated");
 
-  // 修改获取聊天列表的函数
   const fetchChats = useCallback(async () => {
-    if (!session?.user?.name) return;
+    if (!auth0User?.sub) return;
 
     try {
       const response = await fetch("/api/getChats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: session.user.name }),
+        body: JSON.stringify({ userId: auth0User.sub }),
       });
 
       if (response.ok) {
         const { chats } = await response.json();
 
-        // 使用单个状态更新
         setChatLists(() => {
           if (chats.length === 0) {
             const newChat = {
               _id: "",
               title: "新的聊天",
-              userId: session?.user?.name || "",
+              userId: auth0User.sub || "",
               time: getCurrentTimeInLocalTimeZone(),
               messages: [],
             };
@@ -316,7 +297,6 @@ export default function Home() {
             return [newChat];
           }
 
-          // 更新选中的聊天
           const currentSelectedId = selectedChat?._id;
           const updatedSelectedChat = currentSelectedId
             ? chats.find((chat: Chat) => chat._id === currentSelectedId)
@@ -324,7 +304,6 @@ export default function Home() {
 
           setSelectedChat(updatedSelectedChat || chats[0]);
 
-          // 更新聊天信息
           chats.forEach((chat: Chat) => updateChatInfo(chat));
 
           return chats;
@@ -338,14 +317,12 @@ export default function Home() {
         detail: "获取聊天列表失败",
       });
     }
-  }, [session?.user?.name, updateChatInfo, selectedChat?._id, setChatLists, setSelectedChat]);
+  }, [auth0User?.sub, updateChatInfo, selectedChat?._id, setChatLists, setSelectedChat]);
 
-  // 处理聊天选择
   const handleChatSelect = useCallback((chat: Chat) => {
     setSelectedChat(chat);
   }, [setSelectedChat]);
 
-  // 修改 requestAi 函数
   const requestAi = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -355,11 +332,9 @@ export default function Home() {
       setMessage("");
       setIsSending(true);
 
-      // 保存请求的聊天状态，用于失败时回滚
       const previousChat = { ...selectedChat };
 
       try {
-        // 生成新标题
         let newTitle = selectedChat.title;
         if (
           selectedChat.title === "新的聊天" &&
@@ -371,7 +346,6 @@ export default function Home() {
               : currentMessage;
         }
 
-        // 创建初始聊天对象
         const initialChat = {
           ...selectedChat,
           title: newTitle,
@@ -381,7 +355,6 @@ export default function Home() {
           ],
           time: getCurrentTimeInLocalTimeZone(),
         };
-        // 更显示信息（只包含用户消息）
         updateChatInfo({
           ...initialChat,
           messages: initialChat.messages.map((msg) => ({
@@ -397,14 +370,13 @@ export default function Home() {
           })),
         });
 
-        // 发送 POST 请求
         const response = await fetch("/api/fetchAi", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            username: session?.user?.name,
+            userId: auth0User?.sub,
             chatId: selectedChat._id.toString(),
             message: currentMessage,
           }),
@@ -416,7 +388,6 @@ export default function Home() {
         const decoder = new TextDecoder();
         let result = "";
 
-        // 处理流式响应
         while (true) {
           const { done, value } = await reader!.read();
           if (done) break;
@@ -431,9 +402,8 @@ export default function Home() {
                 const content = data.content;
                 if (content === "[DONE]") continue;
 
-                result = content; // 使用完整的markdown内容
+                result = content;
 
-                // 更新选中聊天的内容
                 setSelectedChat((prevChat) => {
                   if (!prevChat) return prevChat;
                   const messages = [...prevChat.messages];
@@ -448,12 +418,10 @@ export default function Home() {
                     });
                   }
                   const updatedChat = { ...prevChat, messages };
-                  // 使用新的计算方式更新显示信息
                   updateChatInfo(updatedChat);
                   return updatedChat;
                 });
 
-                // 更新聊天列表 - 确保使用相同的条件
                 setChatLists((prevLists) =>
                   prevLists.map((chat) => {
                     if (
@@ -484,7 +452,6 @@ export default function Home() {
           }
         }
 
-        // 更新最终状
         const finalChat = {
           ...initialChat,
           messages: [
@@ -494,7 +461,6 @@ export default function Home() {
         };
         updateChatInfo(finalChat as Chat);
 
-        // 如果是新聊天，更新标题和ID
         if (!selectedChat._id) {
           const sessionId = response.headers.get("X-Session-Id");
           if (sessionId) {
@@ -509,7 +475,6 @@ export default function Home() {
 
             setSelectedChat(updatedChat);
 
-            // 使用时间戳来确保只更新正确的新聊天
             setChatLists((prevLists) =>
               prevLists.map((chat) =>
                 chat.time === selectedChat.time && !chat._id
@@ -519,7 +484,6 @@ export default function Home() {
             );
           }
         } else {
-          // 现有聊天的更逻辑保持不变
           setChatLists((prevLists) =>
             prevLists.map((chat) => {
               if (chat._id === selectedChat._id) {
@@ -541,22 +505,17 @@ export default function Home() {
         }
       } catch (error) {
         console.error("Error:", error);
-        // 回滚到之前的状态
         setSelectedChat(previousChat);
 
-        // 回滚聊天列表
         setChatLists((prevLists) => {
-          // 如果是新聊天（没有_id），则从列表中移除
           if (!previousChat._id) {
             return prevLists.filter((chat) => chat.time !== previousChat.time);
           }
-          // 如果是现有聊天，恢复到原始状态
           return prevLists.map((chat) =>
             chat._id === previousChat._id ? previousChat : chat,
           );
         });
 
-        // 回滚聊天信息
         updateChatInfo(previousChat);
 
         toast.current?.show({
@@ -569,10 +528,9 @@ export default function Home() {
         setIsSending(false);
       }
     },
-    [message, selectedChat, session?.user?.name, updateChatInfo, setChatLists, setIsSending, setMessage, setSelectedChat],
+    [message, selectedChat, auth0User?.sub, updateChatInfo, setChatLists, setIsSending, setMessage, setSelectedChat],
   );
 
-  // 添加删除确认对话框
   const confirmDelete = useCallback(
     (chatId: string) => {
       confirmDialog({
@@ -582,7 +540,7 @@ export default function Home() {
         acceptLabel: "确定",
         rejectLabel: "取消",
         accept: () => {
-          deleteChat(chatId, session?.user?.name || "");
+          deleteChat(chatId, auth0User?.sub || "");
           toast.current?.show({
             severity: "success",
             summary: "删除成功",
@@ -592,33 +550,28 @@ export default function Home() {
         },
       });
     },
-    [deleteChat, session?.user?.name],
+    [deleteChat, auth0User?.sub],
   );
 
-  // 添加监听聊天列表变化的 effect
   UseObChatList(
     chatLists,
     setChatLists,
     selectedChat!,
     setSelectedChat,
-    session!,
+    auth0User?.sub || "",
   );
 
-  //增加监听底部元素的effect
   const { ref, inView } = useInView({
     threshold: 0.5,
     triggerOnce: false,
   });
 
-  // 添加 IntersectionObserver
   useEffect(() => {
     setShowScrollButton(!inView);
   }, [inView]);
 
-  // 初始化显示信息
   UseInitInfo(chatLists, updateChatInfo, chatInfo);
 
-  // 添加网络状态监听
   useEffect(() => {
     const handleOffline = () => {
       toast.current?.show({
@@ -647,7 +600,6 @@ export default function Home() {
     };
   }, []);
 
-  // 添加 useEffect 来控制初始化
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
       setInitChat(true);
@@ -655,7 +607,6 @@ export default function Home() {
     }
   }, [isAuthenticated, isLoading, fetchChats]);
 
-  // 侧边栏内容
   const sidebarContent = (
     <div className="flex flex-col w-full h-full p-4">
       <ChatHeader
@@ -665,7 +616,7 @@ export default function Home() {
         disableNewChat={chatLists.some(
           (chat) => chat.title === "新的聊天" && !chat._id,
         )}
-        onSummary={() => router.push("/summary")}
+        onSummary={() => setShowSummary(true)}
         isMobile={isMobile}
       />
       <ChatList
@@ -681,7 +632,6 @@ export default function Home() {
     </div>
   );
 
-  // 主聊天区域内容
   const chatContent = (
     <div className="flex flex-col h-full">
       <div className="w-full h-full">
@@ -757,13 +707,12 @@ export default function Home() {
               </div>
             </div>
           )}
-          {/* 添加底部观察元素 */}
           <div ref={ref} className="p-[1px] w-full relative" />
         </div>
         <form
           ref={chatRef}
           onSubmit={(e) => {
-            e.preventDefault(); // 阻止表单的默认提交行为
+            e.preventDefault();
             requestAi(e);
           }}
           className="relative flex justify-center items-center h-1/4 p-4 border-gray-300 border-solid border-t-[1px] border-b-0 border-l-0 border-r-0 shadow-md"
@@ -776,7 +725,7 @@ export default function Home() {
             onChange={handleMessageChange}
             className="w-full max-h-[600px] overflow-y-auto h-auto p-2 border border-gray-300 rounded-lg"
             placeholder="Enter发送，Shift+Enter换行"
-            onKeyDown={(e) => handleKeyDown(e, requestAi)} // 确保件绑定正确
+            onKeyDown={(e) => handleKeyDown(e, requestAi)}
             disabled={isSending || !initChat}
           />
           <Divider layout="vertical" className="mx-3" />
@@ -802,11 +751,15 @@ export default function Home() {
         onHide={() => {}}
         content={() => (
           <AuthForm
-            toast={toast}
             setInitChat={setInitChat}
             onSuccess={() => fetchChats()}
           />
         )}
+      />
+      <SummaryDialog
+        visible={showSummary}
+        onHide={() => setShowSummary(false)}
+        toast={toast}
       />
       {isMobile ? (
         <MobileLayout

@@ -18,15 +18,11 @@ const userSchema = new mongoose.Schema({
       message: "用户名只能包含字母、数字和下划线",
     },
   },
-  password: {
-    type: String,
-    required: true,
-  },
-  originalPassword: {
-    type: String,
-    required: true,
-  },
   email: {
+    type: String,
+    unique: true,
+  },
+  auth0Id: {
     type: String,
     unique: true,
   },
@@ -40,8 +36,8 @@ const userSchema = new mongoose.Schema({
   },
   provider: {
     type: String,
-    enum: ["credentials", "google"],
-    default: "credentials",
+    enum: ["auth0", "credentials", "google"],
+    default: "auth0",
   },
   accounts: [accountSchema],
 });

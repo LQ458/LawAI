@@ -5,7 +5,7 @@ import Chat from "@/models/chat";
 export async function POST(req: NextRequest) {
   try {
     await DBconnect();
-    const { chatId, newTitle } = await req.json();
+    const { chatId, newTitle, userId } = await req.json();
 
     if (!chatId) {
       return NextResponse.json(
@@ -14,8 +14,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const updatedChat = await Chat.findByIdAndUpdate(
-      chatId,
+    const query: { _id: string; userId?: string } = { _id: chatId };
+    if (userId) {
+      query.userId = userId;
+    }
+
+    const updatedChat = await Chat.findOneAndUpdate(
+      query,
       { title: newTitle },
       { new: true },
     );

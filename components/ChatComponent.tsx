@@ -5,10 +5,12 @@ import { Avatar } from "primereact/avatar";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Button } from "primereact/button";
 import { ProgressSpinner } from "primereact/progressspinner";
+import { useUser } from "@auth0/nextjs-auth0/client";
 
-interface caseDetail {
+interface CaseDetail {
   title: string;
   link: string;
+  id: string;
 }
 
 interface ChatComponentProps {
@@ -24,72 +26,74 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   isTemporary = false,
   onRender,
 }) => {
-  const [copiedMessage, setCopiedMessage] = useState(false); // Add state for message copy
-  const [copiedAiMessage, setCopiedAiMessage] = useState(false); // Add state for AI message copy
+  const { user } = useUser();
+  const [copiedMessage, setCopiedMessage] = useState(false);
   const [isRendered, setIsRendered] = useState(false);
-  const [caseDetails, setCaseDetails] = useState<caseDetail[]>([]);
-  const [showCaseDetails, setShowCaseDetails] = useState(false);
-  const [loading, setLoading] = useState(false); // Add loading state
-  const [aiMessage, setAiMessage] = useState<string>(""); // Add state for AI message
-  const [hasFetched, setHasFetched] = useState(false); // Add state to track if fetching has been done
-  const [showAiResponse, setShowAiResponse] = useState(false); // Add state to toggle AI response visibility
+  const [cases, setCases] = useState<CaseDetail[]>([]);
+  const [showCases, setShowCases] = useState(false);
+  const [loadingCases, setLoadingCases] = useState(false);
+  const [aiSummary, setAiSummary] = useState("");
+  const [hasFetched, setHasFetched] = useState(false);
+  const [expandedCase, setExpandedCase] = useState<string | null>(null);
+  const [caseContent, setCaseContent] = useState<Record<string, string>>({});
+  const [loadingCase, setLoadingCase] = useState<string | null>(null);
 
   const fetchCaseDetails = useCallback(async () => {
     try {
-      setLoading(true); // Set loading to true when fetching starts
+      setLoadingCases(true);
+      const userId = user?.sub || "anonymous";
       const response = await fetch(
-        `/api/chromadbtest?search=${encodeURIComponent(message)}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
+        `/api/rag-search?search=${encodeURIComponent(message)}&userId=${userId}`,
       );
-      if (!response.ok) {
-        throw new Error("Failed to fetch case details");
-      }
-
+      if (!response.ok) throw new Error("Failed");
       const res = await response.json();
-      console.log("Response format:", res); // Print the format of the response
-      const links = res.cases.map((caseDetail: caseDetail) => caseDetail.link);
-      console.log("Fetched case links:", links); // Print only the "link" content
-      setCaseDetails(res.cases);
-      setAiMessage(res.data); // Set AI message
-      setShowCaseDetails(true);
-    } catch (error) {
-      console.error("Error fetching case details:", error);
+      setCases(res.cases || []);
+      setAiSummary(res.data || "");
+    } catch {
+      // ignore
     } finally {
-      setLoading(false); // Set loading to false when fetching ends
+      setLoadingCases(false);
     }
-  }, [message]);
+  }, [message, user?.sub]);
 
   useEffect(() => {
     if (isRendered && !hasFetched) {
       onRender?.();
       if (role === "assistant") {
         fetchCaseDetails();
-        setHasFetched(true); // Set hasFetched to true after fetching
+        setHasFetched(true);
       }
     }
   }, [isRendered, onRender, role, hasFetched, fetchCaseDetails]);
 
-  const handleMarkdownRender = () => {
-    setIsRendered(true);
-  };
-
+  const handleMarkdownRender = () => setIsRendered(true);
   const handleCopyMessage = () => {
     setCopiedMessage(true);
     setTimeout(() => setCopiedMessage(false), 2000);
   };
 
-  const handleCopyAiMessage = () => {
-    setCopiedAiMessage(true);
-    setTimeout(() => setCopiedAiMessage(false), 2000);
-  };
-
-  const handleToggleAiResponse = () => {
-    setShowAiResponse(!showAiResponse);
+  const toggleCaseDetail = async (caseId: string) => {
+    if (expandedCase === caseId) {
+      setExpandedCase(null);
+      return;
+    }
+    setExpandedCase(caseId);
+    if (!caseContent[caseId]) {
+      setLoadingCase(caseId);
+      try {
+        const res = await fetch(`/api/case-detail?id=${caseId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setCaseContent((prev) => ({
+            ...prev,
+            [caseId]: data.content || data.description || "暂无详情",
+          }));
+        }
+      } catch {
+        // ignore
+      }
+      setLoadingCase(null);
+    }
   };
 
   return (
@@ -116,14 +120,11 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         >
           {role === "assistant" ? (
             <>
-              {/* 渲染markdown,即聊天返回内容部分 */}
               <DynamicMarkdownRenderer
                 content={message}
                 onLoad={handleMarkdownRender}
               />
-
-              {/* 复制按钮 */}
-              <div className="mt-2 flex justify-end items-center">
+              <div className="mt-3 flex justify-between items-center border-t border-gray-200 pt-2">
                 <CopyToClipboard text={message} onCopy={handleCopyMessage}>
                   <Button
                     severity="secondary"
@@ -134,16 +135,14 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
                   />
                 </CopyToClipboard>
                 <Button
-                  severity="secondary"
+                  severity={cases.length ? "info" : "secondary"}
                   text
                   size="small"
-                  icon={
-                    showAiResponse ? "pi pi-chevron-up" : "pi pi-chevron-down"
-                  }
-                  onClick={handleToggleAiResponse}
-                  className="rainbow-text"
+                  icon={loadingCases ? "pi pi-spin pi-spinner" : showCases ? "pi pi-chevron-up" : "pi pi-book"}
+                  label={cases.length ? `参考案例 · ${cases.length}` : "参考案例"}
+                  onClick={() => setShowCases(!showCases)}
+                  disabled={loadingCases}
                 />
-                <span className="rainbow-text ml-2">查看相关文献</span>
               </div>
             </>
           ) : (
@@ -159,86 +158,74 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
           />
         )}
       </div>
-      {/* 在这里加入extractive ai的返回部分，可以参考dynamicMarkdownRenderer的渲染模式 */}
-      {showAiResponse &&
-        (loading ? (
-          <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full flex justify-center">
-            <ProgressSpinner />
+
+      {/* 参考案例区 */}
+      {showCases && !loadingCases && (
+        <div className="ml-12 w-full max-w-[80%]">
+          <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+            {cases.length > 0 ? (
+              <>
+                <div className="px-4 pt-3 pb-2">
+                  <p className="text-gray-600 text-sm leading-relaxed">
+                    {aiSummary}
+                  </p>
+                </div>
+
+                <div className="px-2 pb-1">
+                  {cases.map((c, i) => (
+                    <div key={c.id || i}>
+                      <button
+                        onClick={() => toggleCaseDetail(c.id)}
+                        className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
+                      >
+                        <span className="text-xs text-gray-400 w-4 text-right font-mono">
+                          {i + 1}
+                        </span>
+                        <span className="text-blue-600 text-sm flex-1">
+                          {c.title}
+                        </span>
+                        <i
+                          className={`pi pi-chevron-${expandedCase === c.id ? "up" : "down"} text-xs text-gray-400`}
+                        />
+                      </button>
+
+                      {expandedCase === c.id && (
+                        <div className="mx-4 mb-2 p-3 bg-gray-100 rounded text-sm text-gray-700 leading-relaxed">
+                          {loadingCase === c.id ? (
+                            <div className="flex items-center gap-2 text-gray-400 py-2">
+                              <ProgressSpinner
+                                style={{ width: "14px", height: "14px" }}
+                                strokeWidth="6"
+                              />
+                              加载中...
+                            </div>
+                          ) : (
+                            <p className="whitespace-pre-wrap">
+                              {caseContent[c.id] || "暂无详细内容"}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-400 text-sm text-center py-6">
+                未找到相关案例
+              </p>
+            )}
           </div>
-        ) : (
-          showCaseDetails && (
-            <div className="mt-4 p-4 bg-gray-100 rounded-lg w-full">
-              {caseDetails.length > 0 ? (
-                <>
-                  <h3 className="text-lg font-bold">相关案例解读</h3>
-                  <p
-                    dangerouslySetInnerHTML={{
-                      __html: aiMessage.replace(/\n/g, "<br>"),
-                    }}
-                  ></p>{" "}
-                  {/* Display AI message */}
-                  <div className="mt-2 flex justify-end">
-                    <CopyToClipboard
-                      text={aiMessage}
-                      onCopy={handleCopyAiMessage}
-                    >
-                      <Button
-                        severity="secondary"
-                        text
-                        size="small"
-                        icon={copiedAiMessage ? "pi pi-check" : "pi pi-copy"}
-                        label={copiedAiMessage ? "已复制" : "复制"}
-                      />
-                    </CopyToClipboard>
-                  </div>
-                  <h3 className="text-lg font-bold">相关案例:</h3>
-                  <ol className="list-decimal pl-5">
-                    {caseDetails.map((caseDetail, index) => (
-                      <li key={index}>
-                        <a
-                          href={caseDetail.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 underline"
-                        >
-                          {caseDetail.title}
-                        </a>
-                      </li>
-                    ))}
-                  </ol>
-                </>
-              ) : (
-                <p>未找到相关案例</p>
-              )}
-            </div>
-          )
-        ))}
+        </div>
+      )}
+
+      {showCases && loadingCases && (
+        <div className="ml-12 py-3">
+          <ProgressSpinner style={{ width: "20px", height: "20px" }} />
+        </div>
+      )}
     </div>
   );
 };
 
-// Add CSS for rainbow text effect
-const styles = `
-  @keyframes rainbow {
-    0% { color: red; }
-    14% { color: orange; }
-    42% { color: green; }
-    57% { color: blue; }
-    71% { color: indigo; }
-    85% { color: violet; }
-    100% { color: red; }
-  }
-  .rainbow-text {
-    animation: rainbow 10s infinite;
-  }
-`;
-
 export default ChatComponent;
-
-// Inject styles into the document head
-if (typeof document !== "undefined") {
-  const styleSheet = document.createElement("style");
-  styleSheet.type = "text/css";
-  styleSheet.innerText = styles;
-  document.head.appendChild(styleSheet);
-}

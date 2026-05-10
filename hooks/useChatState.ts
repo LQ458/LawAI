@@ -3,17 +3,16 @@ import { Chat } from "@/types";
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 
 interface UseChatStateProps {
-  username: string;
+  userId: string;
 }
 
-export const useChatState = ({ username }: UseChatStateProps) => {
+export const useChatState = ({ userId }: UseChatStateProps) => {
   const [chatLists, setChatLists] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [chatInfo, setChatInfo] = useState<
     Record<string, { time: string; count: number }>
   >({});
 
-  // 更新聊天信息
   const updateChatInfo = useCallback((chat: Chat) => {
     const count = chat.messages.filter((msg) => msg.role !== "system").length;
     setChatInfo((prev) => ({
@@ -25,12 +24,11 @@ export const useChatState = ({ username }: UseChatStateProps) => {
     }));
   }, []);
 
-  // 创建新聊天
   const createNewChat = useCallback(() => {
     const newChat: Chat = {
       _id: "",
       title: "新的聊天",
-      userId: username,
+      userId: userId,
       time: getCurrentTimeInLocalTimeZone(),
       messages: [],
     };
@@ -38,16 +36,15 @@ export const useChatState = ({ username }: UseChatStateProps) => {
     setChatLists((prev) => [newChat, ...prev]);
     setSelectedChat(newChat);
     updateChatInfo(newChat);
-  }, [username, updateChatInfo]);
+  }, [userId, updateChatInfo]);
 
-  // 删除聊天
   const deleteChat = useCallback(
-    async (chatId: string, username: string) => {
+    async (chatId: string, userIdParam: string) => {
       try {
         const response = await fetch("/api/deleteChat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatId, username }),
+          body: JSON.stringify({ chatId, userId: userIdParam }),
         });
 
         if (response.ok) {

@@ -1,6 +1,6 @@
+"use client";
 import { Button } from "primereact/button";
 import { Divider } from "primereact/divider";
-import { signOut } from "next-auth/react";
 import { memo, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -55,6 +55,10 @@ const ChatHeader = memo(
       }
     };
 
+    const handleLogout = () => {
+      window.location.href = "/auth/logout";
+    };
+
     return (
       <>
         <div
@@ -90,7 +94,7 @@ const ChatHeader = memo(
               icon="pi pi-sign-out"
               className="self-center size-[2.1rem]"
               data-tour="logout"
-              onClick={() => signOut({ callbackUrl: window.location.origin })}
+              onClick={handleLogout}
               tooltip="退出登录"
             />
             <Button

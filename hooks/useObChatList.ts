@@ -3,21 +3,20 @@
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
 import { Dispatch, SetStateAction, useEffect } from "react";
 import { Chat } from "@/types";
-import { Session } from "next-auth";
 
 const UseObChatList = (
   chatLists: Chat[],
   setChatLists: Dispatch<SetStateAction<Chat[]>>,
   selectedChat: Chat,
   setSelectedChat: (chat: Chat) => void,
-  session: Session,
+  userId: string,
 ) => {
   useEffect(() => {
-    if (chatLists.length === 0 && session?.user?.name) {
+    if (chatLists.length === 0 && userId) {
       const newChat = {
         _id: "",
         title: "新的聊天",
-        userId: session.user.name,
+        userId: userId,
         time: getCurrentTimeInLocalTimeZone(),
         messages: [],
       };
@@ -26,7 +25,7 @@ const UseObChatList = (
     } else if (chatLists.length > 0 && !selectedChat) {
       setSelectedChat(chatLists[0]);
     }
-  }, [chatLists, selectedChat, session?.user?.name]);
+  }, [chatLists, selectedChat, userId, setChatLists, setSelectedChat]);
 };
 
 export default UseObChatList;

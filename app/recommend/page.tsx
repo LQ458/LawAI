@@ -2,8 +2,9 @@
 import { useEffect, useState, useRef, useCallback, useMemo, memo } from "react";
 import { ScrollTop } from "primereact/scrolltop";
 import { Toast } from "primereact/toast";
-import { useSession } from "next-auth/react";
+import { useUser } from "@auth0/nextjs-auth0/client";
 import CaseCard from "@/components/CaseCard";
+import SummaryDialog from "@/components/SummaryDialog";
 import { IRecordWithUserState, RecommendationResponse } from "@/types";
 import { ProgressSpinner } from "primereact/progressspinner";
 import { Button } from "primereact/button";
@@ -34,7 +35,7 @@ interface SelectButtonContext {
 
 export default function RecommendPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { user, isLoading: authLoading } = useUser();
   const toast = useRef<Toast>(null);
   const [recommendations, setRecommendations] = useState<
     IRecordWithUserState[]
@@ -54,6 +55,7 @@ export default function RecommendPage() {
   const [contentType, setContentType] = useState<"record" | "article">(
     "record",
   );
+  const [showSummary, setShowSummary] = useState(false);
 
   // 添加初始化标记
   const isInitialLoadRef = useRef(true);
@@ -152,7 +154,7 @@ export default function RecommendPage() {
 
   // 修改点赞和收藏处理函数
   const handleLike = async (recordId: string) => {
-    if (!session) {
+    if (!user) {
       toast.current?.show({
         severity: "warn",
         summary: "提示",
@@ -219,7 +221,7 @@ export default function RecommendPage() {
 
   // 修改收藏处理函数
   const handleBookmark = async (recordId: string) => {
-    if (!session) {
+    if (!user) {
       toast.current?.show({
         severity: "warn",
         summary: "提示",
@@ -379,14 +381,13 @@ export default function RecommendPage() {
 
   // 修改初始化加载
   useEffect(() => {
-    if (session?.user?.email && isInitialLoadRef.current) {
+    if (user?.sub && isInitialLoadRef.current) {
       fetchRecommendations();
       isInitialLoadRef.current = false;
     }
-  }, [session?.user?.email, fetchRecommendations]);
+  }, [user?.sub, fetchRecommendations]);
 
-  // 处理加载状态
-  if (status === "loading") {
+  if (authLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <ProgressSpinner />
@@ -394,7 +395,7 @@ export default function RecommendPage() {
     );
   }
 
-  if (status === "unauthenticated") {
+  if (!user && !authLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center p-8 bg-white rounded-lg shadow-md">
@@ -434,6 +435,11 @@ export default function RecommendPage() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <Toast ref={toast} />
+      <SummaryDialog
+        visible={showSummary}
+        onHide={() => setShowSummary(false)}
+        toast={toast}
+      />
 
       {/* 调整header样式 */}
       <header className="sticky top-0 z-50 bg-white shadow-md">
@@ -475,10 +481,10 @@ export default function RecommendPage() {
               {/* 调整按钮间距 */}
               <Button
                 icon="pi pi-file-edit"
-                tooltip="案例总结"
+                tooltip="文本总结"
                 tooltipOptions={{ position: "bottom" }}
                 className="p-button-text p-button-rounded"
-                onClick={() => router.push("/summary")}
+                onClick={() => setShowSummary(true)}
               />
               <Button
                 icon="pi pi-refresh"

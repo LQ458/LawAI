@@ -1,43 +1,42 @@
-import { User } from "next-auth";
-import { useSession } from "next-auth/react";
+"use client";
+import { useUser } from "@auth0/nextjs-auth0/client";
 import { useEffect, useState } from "react";
 
 interface UseAuthReturn {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  user: User | null;
+  user: {
+    sub?: string;
+    name?: string;
+    email?: string;
+    nickname?: string;
+    picture?: string;
+  } | null;
 }
 
 export const useAuth = (): UseAuthReturn => {
-  const { data: session, status } = useSession();
+  const { user, isLoading: authLoading, error: authError } = useUser();
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 检查localStorage中是否有登录状态
-    const checkAuth = async () => {
-      try {
-        const storedAuth = localStorage.getItem("auth");
-        if (storedAuth && status === "unauthenticated") {
-          // 尝试恢复会话
-          await fetch("/api/auth/session");
-        }
-      } catch (err) {
-        console.error(err);
-        setError("登录状态验证失败");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, [status]);
+    if (!authLoading) {
+      setIsLoading(false);
+    }
+  }, [authLoading]);
 
   return {
-    isAuthenticated: status === "authenticated",
-    isLoading: status === "loading" || isLoading,
-    error,
-    user: session?.user as User | null,
+    isAuthenticated: !!user,
+    isLoading: authLoading || isLoading,
+    error: authError?.message ?? null,
+    user: user
+      ? {
+          sub: user.sub,
+          name: user.name ?? undefined,
+          email: user.email ?? undefined,
+          nickname: user.nickname ?? undefined,
+          picture: user.picture ?? undefined,
+        }
+      : null,
   };
 };

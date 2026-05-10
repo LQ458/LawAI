@@ -1,55 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
+import OpenAI from "openai";
 
 export async function POST(req: NextRequest) {
-  const { text } = await req.json();
-
-  // Check if the text is valid
-  if (!text || text.trim().length === 0) {
-    return NextResponse.json({ error: "Text to summarize is required" });
-  }
-
-  const AK = process.env.BAIDU_AK;
-  const SK = process.env.BAIDU_SK;
-
   try {
-    // Request access token
-    const options = {
-      method: "POST",
-      url: `https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=${AK}&client_secret=${SK}`,
-    };
+    const { text } = await req.json();
 
-    // Handle the promise chain
-    return axios(options)
-      .then((keyresponse) => {
-        const accessToken = keyresponse.data.access_token;
+    if (!text || text.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Text to summarize is required" },
+        { status: 400 },
+      );
+    }
 
-        // Second request for summary
-        return axios({
-          method: "POST",
-          url: `https://aip.baidubce.com/rpc/2.0/nlp/v1/news_summary?charset=UTF-8&access_token=${accessToken}`,
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          data: JSON.stringify({
-            content: text,
-            max_summary_len: 500,
-          }),
-        });
-      })
-      .then((response) => {
-        // Return the summary in the response
-        return NextResponse.json({ summary: response.data.summary });
-      })
-      .catch((error) => {
-        // Handle errors during API calls
-        console.error("Error calling AI summarization API:", error);
-        return NextResponse.json({ summary: "Failed to summarize" });
-      });
+    const deepseek = new OpenAI({
+      baseURL: "https://api.deepseek.com",
+      apiKey: process.env.DEEPSEEK_API_KEY!,
+    });
+
+    const response = await deepseek.chat.completions.create({
+      model: process.env.AI_MODEL || "deepseek-chat",
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是一个专业的文本总结助手。请用简洁的中文对以下文本进行总结，保留关键信息，控制在300字以内。",
+        },
+        { role: "user", content: text },
+      ],
+    });
+
+    const summary =
+      response.choices?.[0]?.message?.content || "Failed to summarize";
+
+    return NextResponse.json({ summary });
   } catch (error) {
-    // Catch any unforeseen errors
-    console.error("Unexpected error:", error);
-    return NextResponse.json({ summary: "Failed to summarize" });
+    console.error("Error in summary API:", error);
+    return NextResponse.json(
+      { summary: "Failed to summarize" },
+      { status: 500 },
+    );
   }
 }
