@@ -16,7 +16,6 @@ export interface IRecord extends Document {
   interactionScore: number; // 交互分数
   lastUpdateTime: Date;
   bookmarked?: boolean; // 是否被当前用户收藏
-  _id: string; // MongoDB文档ID
   recommendScore?: number; // 推荐指数
 }
 

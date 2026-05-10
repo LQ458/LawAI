@@ -14,7 +14,6 @@ export interface IArticle extends Document {
   interactionScore: number;
   lastUpdateTime: Date;
   vectorEmbedding?: number[];
-  _id: string;
 }
 
 const articleSchema = new Schema<IArticle>(
