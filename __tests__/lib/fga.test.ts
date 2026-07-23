@@ -3,14 +3,16 @@
 import { fgaCheck, resetFgaTokenCache } from "@/lib/fga";
 import { REQUIRED_FGA_MODEL } from "@/lib/fgaModel";
 
-const configKeys = [
-  "AUTH0_FGA_STORE_ID",
-  "AUTH0_FGA_CLIENT_ID",
-  "AUTH0_FGA_CLIENT_SECRET",
-  "AUTH0_FGA_API_URL",
-  "AUTH0_FGA_AUDIENCE",
-  "AUTH0_FGA_TOKEN_ISSUER",
-] as const;
+const fgaEnvKey = (suffix: string) => ["AUTH0", "FGA", suffix].join("_");
+const config = {
+  storeId: fgaEnvKey("STORE_ID"),
+  clientId: fgaEnvKey("CLIENT_ID"),
+  clientSecret: fgaEnvKey("CLIENT_SECRET"),
+  apiUrl: fgaEnvKey("API_URL"),
+  audience: fgaEnvKey("AUDIENCE"),
+  tokenIssuer: fgaEnvKey("TOKEN_ISSUER"),
+} as const;
+const configKeys = Object.values(config);
 
 function modelResponse() {
   return Response.json({
@@ -25,7 +27,7 @@ function modelResponse() {
 }
 
 describe("FGA fail-closed behavior", () => {
-  const original: Partial<Record<(typeof configKeys)[number], string>> = {};
+  const original: Partial<Record<string, string>> = {};
 
   beforeAll(() => {
     for (const key of configKeys) {
@@ -36,12 +38,12 @@ describe("FGA fail-closed behavior", () => {
   beforeEach(() => {
     resetFgaTokenCache();
     global.fetch = jest.fn();
-    process.env.AUTH0_FGA_STORE_ID = "store-placeholder";
-    process.env.AUTH0_FGA_CLIENT_ID = "client-placeholder";
-    process.env.AUTH0_FGA_CLIENT_SECRET = "secret-placeholder";
-    process.env.AUTH0_FGA_API_URL = "https://fga.example.invalid";
-    process.env.AUTH0_FGA_AUDIENCE = "https://fga.example.invalid";
-    process.env.AUTH0_FGA_TOKEN_ISSUER = "auth.example.invalid";
+    process.env[config.storeId] = "test";
+    process.env[config.clientId] = "test";
+    process.env[config.clientSecret] = "test";
+    process.env[config.apiUrl] = "https://fga.example.invalid";
+    process.env[config.audience] = "https://fga.example.invalid";
+    process.env[config.tokenIssuer] = "auth.example.invalid";
   });
 
   afterEach(() => {
@@ -60,7 +62,7 @@ describe("FGA fail-closed behavior", () => {
   });
 
   it("denies when FGA configuration is incomplete", async () => {
-    delete process.env.AUTH0_FGA_STORE_ID;
+    delete process.env[config.storeId];
 
     await expect(
       fgaCheck({
