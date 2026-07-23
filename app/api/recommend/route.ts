@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Record } from "@/models/record";
 import DBconnect from "@/lib/mongodb";
 import { Article } from "@/models/article";
+import { filterDocsByAccess } from "@/lib/docAccess";
+import { getServerIdentity } from "@/lib/serverAuth";
 
 // 推荐系统配置
 const CONFIG = {
@@ -26,7 +28,6 @@ const CONFIG = {
     CANDIDATE_MULTIPLIER: 2, // 候选集大小倍数
   },
 } as const;
-
 
 /**
  * 计算内容与用户兴趣的相似度分数
@@ -137,12 +138,17 @@ const CONFIG = {
 //   }));
 // }
 
-
 /**
  * 推荐API的GET处理函数
  */
 export async function GET(req: NextRequest) {
   try {
+    let subject: string | null = null;
+    try {
+      subject = (await getServerIdentity(req))?.subject || null;
+    } catch {
+      // Identity-provider failure remains anonymous/public-only.
+    }
     await DBconnect();
 
     const searchParams = req.nextUrl.searchParams;
@@ -166,20 +172,72 @@ export async function GET(req: NextRequest) {
         likes: 1,
         lastUpdateTime: 1,
         interactionScore: 1,
+        documentId: 1,
+        visibility: 1,
+        sensitivity: 1,
+        department: 1,
+        fgaObjectId: 1,
+        source: 1,
+        sourceKind: 1,
         ...(contentType === CONFIG.CONTENT_TYPES.ARTICLE && {
           author: 1,
           publishDate: 1,
         }),
-      });
+      })
+      .lean();
+
+    const visibleRecommendations =
+      contentType === CONFIG.CONTENT_TYPES.RECORD
+        ? await filterDocsByAccess(
+            recommendations.map((record) => ({
+              id: String(record._id),
+              documentId: record.documentId,
+              title: record.title || "",
+              description: record.description,
+              visibility: record.visibility,
+              sensitivity: record.sensitivity,
+              department: record.department,
+              fgaObjectId: record.fgaObjectId,
+              source: record.source,
+              sourceKind: record.sourceKind,
+            })),
+            subject,
+          )
+        : [];
+    const visibleIds = new Set(
+      visibleRecommendations.flatMap((document) => [
+        document.id,
+        document.documentId || "",
+      ]),
+    );
+    const authorized =
+      contentType === CONFIG.CONTENT_TYPES.RECORD
+        ? recommendations.filter(
+            (record) =>
+              visibleIds.has(String(record._id)) ||
+              visibleIds.has(record.documentId || ""),
+          )
+        : [];
 
     return NextResponse.json({
-      recommendations,
-      totalRecords: recommendations.length,
+      recommendations: authorized.map((record) => ({
+        _id: record._id,
+        documentId: record.documentId,
+        title: record.title,
+        description: record.description,
+        tags: record.tags,
+        category: record.category,
+        views: record.views,
+        likes: record.likes,
+        lastUpdateTime: record.lastUpdateTime,
+        interactionScore: record.interactionScore,
+      })),
+      totalRecords: authorized.length,
       hasMore: false,
       currentPage: 1,
     });
-  } catch (error) {
-    console.error("Recommendation error:", error);
+  } catch {
+    console.error("Failed to fetch authorized recommendations");
     return NextResponse.json(
       { error: "Failed to get recommendations" },
       { status: 500 },

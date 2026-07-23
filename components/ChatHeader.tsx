@@ -47,7 +47,7 @@ const ChatHeader = memo(
           return (
             <div>
               <h1 className="text-2xl">法律AI</h1>
-              <p>你的私人法律顾问</p>
+              <p>一般法律信息原型（不构成法律意见）</p>
             </div>
           );
         case "hidden":

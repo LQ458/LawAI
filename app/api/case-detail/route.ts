@@ -1,31 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import DBconnect from "@/lib/mongodb";
-import { Record } from "@/models/record";
+import { getServerIdentity } from "@/lib/serverAuth";
+import { getAuthorizedDocument, RagServiceError } from "@/lib/rag";
 
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
+  const id = request.nextUrl.searchParams.get("id");
+  if (!id || id.length > 200 || !/^[A-Za-z0-9._:-]+$/.test(id)) {
+    return NextResponse.json({ error: "invalid_document_id" }, { status: 400 });
+  }
+
+  let subject: string | null = null;
   try {
-    const id = req.nextUrl.searchParams.get("id");
-    if (!id) {
-      return NextResponse.json({ error: "ID required" }, { status: 400 });
-    }
+    subject = (await getServerIdentity(request))?.subject || null;
+  } catch {
+    // A failed identity lookup is anonymous and therefore public-only.
+  }
 
-    await DBconnect();
-    const doc = await Record.findById(id)
-      .select("title description content tags category")
-      .lean() as { title?: string; description?: string; content?: string; tags?: string[]; category?: string } | null;
-
-    if (!doc) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    const document = await getAuthorizedDocument(id, subject);
+    if (!document) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 
     return NextResponse.json({
-      title: doc.title,
-      description: doc.description,
-      content: doc.content,
-      tags: doc.tags,
-      category: doc.category,
+      id: document.documentId || document.id,
+      title: document.title,
+      description: document.description || "",
+      content: document.content || "",
+      source: document.source || "unspecified",
     });
-  } catch {
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+  } catch (error) {
+    if (error instanceof RagServiceError) {
+      return NextResponse.json(
+        { error: "document_upstream_unavailable" },
+        { status: 502 },
+      );
+    }
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 }
