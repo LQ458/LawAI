@@ -1,6 +1,11 @@
 import { evaluateResponses, JudgeInput } from "../evaluator/judge";
 import { saveReport } from "../evaluator/reporter";
 import { TEST_CASES } from "../evaluator/test-cases";
+import {
+  EVALUATION_DATASET_VERSION,
+  JUDGE_PROMPT_VERSION,
+  RUBRIC_VERSION,
+} from "../evaluator/rubric";
 import * as path from "path";
 
 async function run() {
@@ -9,8 +14,21 @@ async function run() {
     console.error("DEEPSEEK_API_KEY not set in environment");
     process.exit(1);
   }
+  if (process.env.RUN_EXTERNAL_EVALUATION !== "1") {
+    console.error(
+      "External evaluation is disabled. Set RUN_EXTERNAL_EVALUATION=1 explicitly.",
+    );
+    process.exit(1);
+  }
+  const AUTH_COOKIE = process.env.EVALUATION_AUTH_COOKIE;
+  if (!AUTH_COOKIE) {
+    console.error("EVALUATION_AUTH_COOKIE is required for the optional suite.");
+    process.exit(1);
+  }
 
   const BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
+  const answerModel = process.env.AI_MODEL || "deepseek-chat";
+  const judgeModel = process.env.EVALUATION_MODEL || "deepseek-chat";
 
   console.log("=== LawAI AI Chat Evaluation ===\n");
   console.log(`Target: ${BASE_URL}`);
@@ -19,14 +37,16 @@ async function run() {
   const inputs: JudgeInput[] = [];
 
   for (const tc of TEST_CASES) {
-    console.log(`[${tc.id}/${TEST_CASES.length}] Sending: ${tc.query.slice(0, 50)}...`);
+    console.log(`[${tc.id}/${TEST_CASES.length}] Sending curated test case`);
 
     try {
       const res = await fetch(`${BASE_URL}/api/fetchAi`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: AUTH_COOKIE,
+        },
         body: JSON.stringify({
-          userId: `test-user-${Date.now()}`,
           chatId: "",
           message: tc.query,
         }),
@@ -36,6 +56,7 @@ async function run() {
         console.error(`  API error: ${res.status}`);
         inputs.push({
           ...tc,
+          testId: tc.id,
           response: `API_ERROR:${res.status}`,
         });
         continue;
@@ -66,16 +87,18 @@ async function run() {
         }
       }
 
-      console.log(`  Got response: ${fullResponse.length} chars`);
+      console.log("  Response received");
       inputs.push({
         ...tc,
+        testId: tc.id,
         response: fullResponse,
       });
-    } catch (error) {
-      console.error(`  Error:`, error);
+    } catch {
+      console.error("  Curated test request failed");
       inputs.push({
         ...tc,
-        response: `ERROR:${error instanceof Error ? error.message : "unknown"}`,
+        testId: tc.id,
+        response: "REQUEST_ERROR",
       });
     }
 
@@ -83,10 +106,17 @@ async function run() {
   }
 
   console.log("\n=== AI Evaluation Phase ===\n");
-  const results = await evaluateResponses(inputs, API_KEY);
+  const results = await evaluateResponses(inputs, API_KEY, judgeModel);
 
   const outputDir = path.join(__dirname, "output");
-  saveReport(results, outputDir);
+  saveReport(results, outputDir, {
+    runAt: new Date().toISOString(),
+    answerModel,
+    judgeModel,
+    promptVersion: JUDGE_PROMPT_VERSION,
+    rubricVersion: RUBRIC_VERSION,
+    datasetVersion: EVALUATION_DATASET_VERSION,
+  });
 
   const avgScore =
     results.reduce((sum, r) => sum + r.evaluation.total, 0) / results.length;
