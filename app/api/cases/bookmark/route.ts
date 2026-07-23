@@ -1,33 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth0 } from "@/lib/auth0";
 import DBconnect from "@/lib/mongodb";
 import { Record } from "@/models/record";
 import { Bookmark } from "@/models/bookmark";
 import mongoose from "mongoose";
 import { CONFIG } from "@/config";
+import { filterDocsByAccess } from "@/lib/docAccess";
+import { getServerIdentity } from "@/lib/serverAuth";
+import { cleanBoundedString, readJsonObject } from "@/lib/request";
+
+const MAX_BODY_BYTES = 1_024;
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth0.getSession();
-    const userSub = session?.user?.sub;
-
-    if (!userSub) {
+    const identity = await getServerIdentity(req);
+    if (!identity) {
       return NextResponse.json({ error: "请先登录" }, { status: 401 });
     }
 
-    const { recordId } = await req.json();
-    if (!recordId) {
-      return NextResponse.json({ error: "缺少必要参数" }, { status: 400 });
+    const body = await readJsonObject(req, MAX_BODY_BYTES);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
     }
+    const recordId = cleanBoundedString(body.value.recordId, {
+      min: 24,
+      max: 24,
+    });
 
-    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+    if (!recordId || !mongoose.Types.ObjectId.isValid(recordId)) {
       return NextResponse.json({ error: "无效的记录ID" }, { status: 400 });
     }
+    const userSub = identity.subject;
 
     await DBconnect();
 
     const record = await Record.findById(recordId);
     if (!record) {
+      return NextResponse.json({ error: "案例不存在" }, { status: 404 });
+    }
+    const [authorized] = await filterDocsByAccess(
+      [
+        {
+          id: record._id.toString(),
+          documentId: record.documentId,
+          title: record.title,
+          visibility: record.visibility,
+          sensitivity: record.sensitivity,
+          department: record.department,
+          fgaObjectId: record.fgaObjectId,
+        },
+      ],
+      userSub,
+    );
+    if (!authorized) {
       return NextResponse.json({ error: "案例不存在" }, { status: 404 });
     }
 
@@ -109,11 +133,7 @@ export async function POST(req: NextRequest) {
     } finally {
       sessionDb.endSession();
     }
-  } catch (error: unknown) {
-    console.error("Bookmark error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "收藏操作失败" },
-      { status: 500 },
-    );
+  } catch {
+    return NextResponse.json({ error: "收藏操作失败" }, { status: 500 });
   }
 }

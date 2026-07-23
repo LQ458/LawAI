@@ -8,15 +8,20 @@ const createJestConfig = nextJest({
 const customJestConfig: Config = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   testEnvironment: "jest-environment-jsdom",
+  testMatch: [
+    "<rootDir>/__tests__/**/*.(spec|test).[jt]s",
+    "<rootDir>/__tests__/**/*.(spec|test).[jt]sx",
+  ],
+  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/e2e/"],
+  clearMocks: true,
   moduleNameMapper: {
-    "^@/components/(.*)$": "<rootDir>/components/$1",
-    "^@/app/(.*)$": "<rootDir>/app/$1",
-    "^@/lib/(.*)$": "<rootDir>/lib/$1",
+    "^@/(.*)$": "<rootDir>/$1",
+    "^server-only$": "<rootDir>/__tests__/mocks/server-only.ts",
   },
   collectCoverageFrom: [
     "components/**/*.{ts,tsx}",
     "app/**/*.{ts,tsx}",
-    "!app/api/**/*.{ts,tsx}",
+    "lib/**/*.{ts,tsx}",
   ],
 };
 

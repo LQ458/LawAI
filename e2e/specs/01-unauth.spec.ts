@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { waitForApp, expectDialogVisible, expectTextVisible } from "../fixtures/helpers";
+import {
+  waitForApp,
+  expectDialogVisible,
+  expectTextVisible,
+} from "../fixtures/helpers";
 
 test.describe("未登录状态 UI 测试", () => {
   test("1.1 首页加载，显示登录对话框", async ({ page }) => {
@@ -16,17 +20,13 @@ test.describe("未登录状态 UI 测试", () => {
     });
   });
 
-  test("1.3 总结 API 测试 (绕过模态框)", async ({ request }) => {
+  test("1.3 未登录用户不能调用总结 API", async ({ request }) => {
     const res = await request.post("http://localhost:3000/api/summary", {
       data: {
-        text: "根据《劳动合同法》规定，用人单位应当与劳动者签订书面劳动合同。未签订劳动合同的，应当支付双倍工资。",
+        text: "需要总结的示例文本。",
       },
     });
-    expect(res.status()).toBe(200);
-    const data = await res.json();
-    expect(data).toHaveProperty("summary");
-    expect(typeof data.summary).toBe("string");
-    expect(data.summary.length).toBeGreaterThan(10);
+    expect(res.status()).toBe(401);
   });
 
   test("1.4 总结对话框在 UI 中存在", async ({ page }) => {
@@ -42,8 +42,7 @@ test.describe("未登录状态 UI 测试", () => {
   });
 
   test("1.6 管理页面需要登录", async ({ page }) => {
-    await page.goto("/admin");
-    await page.waitForLoadState("domcontentloaded");
-    await expectTextVisible(page, "请先登录");
+    const response = await page.goto("/admin");
+    expect(response?.status()).toBe(401);
   });
 });

@@ -19,8 +19,9 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "法律AI",
-  description: "By Leo Qin",
+  title: "LawAI 法律信息原型",
+  description:
+    "Privacy-aware legal information RAG technical prototype; not formal legal advice.",
 };
 
 export default function RootLayout({
@@ -29,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <head>
         <style
           dangerouslySetInnerHTML={{

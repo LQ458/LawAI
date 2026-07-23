@@ -3,15 +3,18 @@ import { TEST_QUERIES, TestQuery } from "../fixtures/test-queries";
 import { extractSSEData } from "../fixtures/helpers";
 
 const BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
+const AUTH_COOKIE = process.env.E2E_AUTH_COOKIE || "";
 
 async function sendChatQuery(
   query: string,
-  userId: string,
 ): Promise<{ response: string; chatId: string }> {
   const res = await fetch(`${BASE_URL}/api/fetchAi`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, chatId: "", message: query }),
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: AUTH_COOKIE,
+    },
+    body: JSON.stringify({ chatId: "", message: query }),
   });
 
   if (!res.ok) {
@@ -37,11 +40,14 @@ test.describe("AI 对话测试 (API-level)", () => {
     [];
 
   for (const tc of TEST_QUERIES) {
-    test(`3.${tc.id} ${tc.category}: ${tc.query.slice(0, 30)}...`, async () => {
+    test(`3.${tc.id} ${tc.category}`, async () => {
+      test.skip(
+        !AUTH_COOKIE,
+        "Optional external suite requires E2E_AUTH_COOKIE",
+      );
       test.setTimeout(90_000);
 
-      const userId = `e2e-test-${Date.now()}-${tc.id}`;
-      const { response, chatId } = await sendChatQuery(tc.query, userId);
+      const { response, chatId } = await sendChatQuery(tc.query);
 
       expect(response.length).toBeGreaterThan(50);
       expect(chatId).toBeTruthy();
@@ -89,7 +95,7 @@ test.describe("AI 对话测试 (API-level)", () => {
 
       expect(
         hasRelevantContent,
-        `Response should contain relevant legal terms. Response: "${response.slice(0, 100)}..."`,
+        "Response should contain relevant legal-information terms",
       ).toBeTruthy();
     });
   }

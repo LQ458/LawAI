@@ -1,4 +1,4 @@
-import { Page, BrowserContext } from "@playwright/test";
+import { Page } from "@playwright/test";
 
 export async function waitForApp(page: Page): Promise<void> {
   await page.goto("/");
@@ -15,13 +15,13 @@ export async function expectTextVisible(
   page: Page,
   text: string,
 ): Promise<void> {
-  await page.getByText(text).first().waitFor({ state: "visible", timeout: 5000 });
+  await page
+    .getByText(text)
+    .first()
+    .waitFor({ state: "visible", timeout: 5000 });
 }
 
-export async function typeInChatInput(
-  page: Page,
-  text: string,
-): Promise<void> {
+export async function typeInChatInput(page: Page, text: string): Promise<void> {
   const textarea = page.locator("textarea").first();
   await textarea.click();
   await textarea.fill(text);
@@ -32,9 +32,9 @@ export async function submitChat(page: Page): Promise<void> {
 }
 
 export async function waitForAIResponse(page: Page): Promise<string> {
-  const assistantBubble = page.locator(
-    ".bg-gray-100, [class*='bg-gray-100']",
-  ).last();
+  const assistantBubble = page
+    .locator(".bg-gray-100, [class*='bg-gray-100']")
+    .last();
 
   await assistantBubble.waitFor({ state: "visible", timeout: 30_000 });
   await page.waitForTimeout(2000);

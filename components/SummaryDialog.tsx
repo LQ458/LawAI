@@ -31,7 +31,10 @@ export default function SummaryDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      const data = await res.json();
+      const data = (await res.json()) as { summary?: string; error?: string };
+      if (!res.ok || !data.summary) {
+        throw new Error(data.error || "Summary request failed");
+      }
       setSummary(data.summary);
     } catch {
       toast.current?.show({
@@ -96,6 +99,7 @@ export default function SummaryDialog({
             onChange={(e) => setText(e.target.value)}
             rows={8}
             autoResize
+            maxLength={20000}
             className="w-full"
             placeholder="粘贴需要总结的法律文本..."
           />

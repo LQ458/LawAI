@@ -127,14 +127,14 @@ const ResponsiveTitle = () => {
         {showFullTitle ? (
           <div className="flex items-center gap-4">
             <span className="text-subtitle text-gray-600 whitespace-nowrap">
-              你的私人法律顾问
+              一般法律信息助手
             </span>
           </div>
         ) : (
           <div className="flex items-center gap-2">
             <span
               className="text-2xl cursor-help"
-              title="法律AI - 你的私人法律顾问"
+              title="法律AI - 一般法律信息助手"
             >
               ⚖️
             </span>
@@ -278,7 +278,7 @@ export default function Home() {
       const response = await fetch("/api/getChats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: auth0User.sub }),
+        body: JSON.stringify({}),
       });
 
       if (response.ok) {
@@ -317,11 +317,20 @@ export default function Home() {
         detail: "获取聊天列表失败",
       });
     }
-  }, [auth0User?.sub, updateChatInfo, selectedChat?._id, setChatLists, setSelectedChat]);
+  }, [
+    auth0User?.sub,
+    updateChatInfo,
+    selectedChat?._id,
+    setChatLists,
+    setSelectedChat,
+  ]);
 
-  const handleChatSelect = useCallback((chat: Chat) => {
-    setSelectedChat(chat);
-  }, [setSelectedChat]);
+  const handleChatSelect = useCallback(
+    (chat: Chat) => {
+      setSelectedChat(chat);
+    },
+    [setSelectedChat],
+  );
 
   const requestAi = useCallback(
     async (e: React.FormEvent) => {
@@ -376,8 +385,7 @@ export default function Home() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            userId: auth0User?.sub,
-            chatId: selectedChat._id.toString(),
+            chatId: selectedChat._id || "",
             message: currentMessage,
           }),
         });
@@ -385,28 +393,60 @@ export default function Home() {
         if (!response.ok) throw new Error("Failed to fetch");
 
         const reader = response.body?.getReader();
+        if (!reader) throw new Error("Missing response body");
         const decoder = new TextDecoder();
         let result = "";
+        let eventBuffer = "";
 
         while (true) {
-          const { done, value } = await reader!.read();
+          const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
+          eventBuffer += decoder.decode(value, { stream: true });
+          const events = eventBuffer.split("\n\n");
+          eventBuffer = events.pop() || "";
 
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                const content = data.content;
-                if (content === "[DONE]") continue;
+          for (const event of events) {
+            const dataLine = event
+              .split("\n")
+              .find((line) => line.startsWith("data: "));
+            if (!dataLine) continue;
 
-                result = content;
+            const data = JSON.parse(dataLine.slice(6)) as {
+              content?: string;
+              error?: string;
+            };
+            if (data.error) throw new Error("AI service unavailable");
+            if (!data.content || data.content === "[DONE]") continue;
 
-                setSelectedChat((prevChat) => {
-                  if (!prevChat) return prevChat;
-                  const messages = [...prevChat.messages];
+            result = data.content;
+
+            setSelectedChat((prevChat) => {
+              if (!prevChat) return prevChat;
+              const messages = [...prevChat.messages];
+              const lastMessage = messages[messages.length - 1];
+              if (lastMessage && lastMessage.role === "assistant") {
+                lastMessage.content = result;
+              } else {
+                messages.push({
+                  role: "assistant",
+                  content: result,
+                  timestamp: new Date(),
+                });
+              }
+              const updatedChat = { ...prevChat, messages };
+              updateChatInfo(updatedChat);
+              return updatedChat;
+            });
+
+            setChatLists((prevLists) =>
+              prevLists.map((chat) => {
+                if (
+                  chat.time === selectedChat.time &&
+                  (chat._id === selectedChat._id ||
+                    (!chat._id && !selectedChat._id))
+                ) {
+                  const messages = [...chat.messages];
                   const lastMessage = messages[messages.length - 1];
                   if (lastMessage && lastMessage.role === "assistant") {
                     lastMessage.content = result;
@@ -417,40 +457,15 @@ export default function Home() {
                       timestamp: new Date(),
                     });
                   }
-                  const updatedChat = { ...prevChat, messages };
-                  updateChatInfo(updatedChat);
-                  return updatedChat;
-                });
-
-                setChatLists((prevLists) =>
-                  prevLists.map((chat) => {
-                    if (
-                      chat.time === selectedChat.time &&
-                      (chat._id === selectedChat._id ||
-                        (!chat._id && !selectedChat._id))
-                    ) {
-                      const messages = [...chat.messages];
-                      const lastMessage = messages[messages.length - 1];
-                      if (lastMessage && lastMessage.role === "assistant") {
-                        lastMessage.content = result;
-                      } else {
-                        messages.push({
-                          role: "assistant",
-                          content: result,
-                          timestamp: new Date(),
-                        });
-                      }
-                      return { ...chat, messages };
-                    }
-                    return chat;
-                  }),
-                );
-              } catch (error) {
-                console.error("Error parsing chunk:", error);
-              }
-            }
+                  return { ...chat, messages };
+                }
+                return chat;
+              }),
+            );
           }
         }
+
+        if (!result) throw new Error("AI service returned no content");
 
         const finalChat = {
           ...initialChat,
@@ -528,7 +543,15 @@ export default function Home() {
         setIsSending(false);
       }
     },
-    [message, selectedChat, auth0User?.sub, updateChatInfo, setChatLists, setIsSending, setMessage, setSelectedChat],
+    [
+      message,
+      selectedChat,
+      updateChatInfo,
+      setChatLists,
+      setIsSending,
+      setMessage,
+      setSelectedChat,
+    ],
   );
 
   const confirmDelete = useCallback(
@@ -540,7 +563,7 @@ export default function Home() {
         acceptLabel: "确定",
         rejectLabel: "取消",
         accept: () => {
-          deleteChat(chatId, auth0User?.sub || "");
+          deleteChat(chatId);
           toast.current?.show({
             severity: "success",
             summary: "删除成功",
@@ -550,7 +573,7 @@ export default function Home() {
         },
       });
     },
-    [deleteChat, auth0User?.sub],
+    [deleteChat],
   );
 
   UseObChatList(
@@ -632,6 +655,10 @@ export default function Home() {
     </div>
   );
 
+  const visibleMessages =
+    selectedChat?.messages?.filter((message) => message.role !== "system") ||
+    [];
+
   const chatContent = (
     <div className="flex flex-col h-full">
       <div className="w-full h-full">
@@ -654,6 +681,9 @@ export default function Home() {
                   : 0}
                 条对话
               </p>
+              <p className="m-0 mt-1 text-xs text-gray-500">
+                普通聊天未连接资料检索；回答仅为一般法律信息，不构成法律意见。
+              </p>
             </div>
           </div>
           <Divider />
@@ -665,16 +695,21 @@ export default function Home() {
         >
           {initChat ? (
             <>
-              {selectedChat?.messages
-                ?.filter((msg) => msg.role !== "system")
-                .map((message, index) => (
-                  <ChatComponent
-                    key={index + message.timestamp.toString()}
-                    role={message.role}
-                    message={message.content}
-                    onRender={() => setMarkdownRendered(true)}
-                  />
-                ))}
+              {visibleMessages.map((message, index) => (
+                <ChatComponent
+                  key={index + message.timestamp.toString()}
+                  role={message.role}
+                  message={message.content}
+                  retrievalQuery={
+                    message.role === "assistant" &&
+                    index > 0 &&
+                    visibleMessages[index - 1].role === "user"
+                      ? visibleMessages[index - 1].content
+                      : undefined
+                  }
+                  onRender={() => setMarkdownRendered(true)}
+                />
+              ))}
               {tempMessage && (
                 <ChatComponent
                   role="user"
@@ -725,6 +760,7 @@ export default function Home() {
             onChange={handleMessageChange}
             className="w-full max-h-[600px] overflow-y-auto h-auto p-2 border border-gray-300 rounded-lg"
             placeholder="Enter发送，Shift+Enter换行"
+            maxLength={4000}
             onKeyDown={(e) => handleKeyDown(e, requestAi)}
             disabled={isSending || !initChat}
           />
@@ -750,10 +786,7 @@ export default function Home() {
         visible={!isAuthenticated && !isLoading}
         onHide={() => {}}
         content={() => (
-          <AuthForm
-            setInitChat={setInitChat}
-            onSuccess={() => fetchChats()}
-          />
+          <AuthForm setInitChat={setInitChat} onSuccess={() => fetchChats()} />
         )}
       />
       <SummaryDialog
