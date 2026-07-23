@@ -1,184 +1,100 @@
-# LawAI 测试流程 / Testing Procedure
+# LawAI testing procedure
 
-## 测试架构
+默认 CI 使用 mocked、deterministic tests，不需要真实 DeepSeek、Pinecone、MongoDB、Auth0 或 FGA credential。真实服务与浏览器场景属于 optional external suites。
 
-```
-e2e/
-├── playwright.config.ts       # Playwright 配置
-├── fixtures/
-│   ├── test-queries.ts        # 12 个法律咨询测试用例
-│   ├── users.ts               # 演示用户定义 (alice/bob/charlie)
-│   └── helpers.ts             # 测试辅助函数
-├── specs/
-│   ├── 01-unauth.spec.ts      # 未登录状态 UI 测试 (6 个)
-│   ├── 02-auth-flow.spec.ts   # Auth0 重定向流程测试 (4 个)
-│   ├── 03-chat-ai.spec.ts     # 完整 AI 对话测试 (12 个)
-│   ├── 04-fga-access.spec.ts  # 文档权限控制测试 (4 个)
-│   └── 05-api-direct.spec.ts  # 直接 API 端点测试 (6 个)
-├── evaluator/
-│   ├── rubric.ts              # 评分标准定义
-│   ├── judge.ts               # AI 评估代理
-│   ├── test-cases.ts          # 测试用例 → 预期行为映射
-│   └── reporter.ts            # JSON/Markdown 报告生成
-└── report/
-    └── index.ts               # 主脚本：运行全部 → 评估 → 输出分数
-```
-
-## 运行测试
-
-### 前置条件
+## 默认验证
 
 ```bash
-# 1. 确保依赖已安装
-npm install
-
-# 2. 确保 .env.local 配置正确 (复制自 .env.local.example)
-cp .env.local.example .env.local
-
-# 3. 启动开发服务器
-npm run dev
-
-# 4. 或者在另一个终端运行
-npm run dev -- --port 3000
+npm ci
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run test:integration
+npm test
+npm run build
+npm run audit:prod
+npm run scan:secrets:working-tree
 ```
 
-### 执行全部测试
+Jest 的 `testMatch` 只收集 `__tests__`，显式排除 `e2e/`。
+
+2026-07-23 的实际本地结果：
+
+| Suite                                | 命令                       | 结果                              |
+| ------------------------------------ | -------------------------- | --------------------------------- |
+| Unit/API/component                   | `npm run test:unit`        | 11 suites，47 passed              |
+| Mocked authorization/RAG integration | `npm run test:integration` | 1 suite，5 passed                 |
+| Default Jest total                   | `npm test`                 | 12 suites，52 unique tests passed |
+
+重点断言：
+
+- 请求体伪造 `userId` 不改变 server-side identity；
+- anonymous 只看到 explicit public records；
+- allowed subject 可读取同一 restricted fixture，denied subject 不可读取；
+- FGA 未配置、token 失败或异常时 restricted fail closed；
+- denied 标题、摘要和正文不进入 model context 或 sources；
+- RAG answer 只能引用获准 document IDs；
+- chat 读取、更新、删除绑定当前 owner；
+- 普通登录用户访问 admin activity 得到 403；
+- 非法 JSON、错误类型、长度超限和 upstream failure 返回受控状态。
+
+## Playwright external suite
+
+发现命令：
 
 ```bash
-# 安装 Playwright 浏览器 (首次)
-npx playwright install chromium
-
-# 运行全部 E2E 测试
-npm run test:e2e
-
-# 仅运行 AI 对话测试 + 评估
-npx tsx e2e/report/index.ts
+npx playwright test --config=e2e/playwright.config.ts --list
 ```
 
-### 执行特定测试
+当前发现 5 个 spec 文件、32 个场景：
+
+| Spec                    | 场景数 | 说明                                                                   |
+| ----------------------- | -----: | ---------------------------------------------------------------------- |
+| `01-unauth.spec.ts`     |      6 | anonymous UI/API boundary                                              |
+| `02-auth-flow.spec.ts`  |      4 | Auth0 login/logout redirect boundary                                   |
+| `03-chat-ai.spec.ts`    |     12 | 12 curated queries，需要 authenticated session 与 DeepSeek             |
+| `04-fga-access.spec.ts` |      4 | manager allowed、employee denied、anonymous public-only、forged userId |
+| `05-api-direct.spec.ts` |      6 | API smoke checks，部分需要 session/external services                   |
+
+运行：
 
 ```bash
-# 未登录 UI 测试
-npx playwright test e2e/specs/01-unauth.spec.ts
-
-# Auth0 流程测试
-npx playwright test e2e/specs/02-auth-flow.spec.ts
-
-# AI 对话测试 (含 AI 评委评分)
-npx playwright test e2e/specs/03-chat-ai.spec.ts
-
-# 权限控制测试
-npx playwright test e2e/specs/04-fga-access.spec.ts
-
-# API 端点测试
-npx playwright test e2e/specs/05-api-direct.spec.ts
+npm run test:e2e:external
 ```
 
-## 测试场景总览
+按场景提供的 fixture 包括 `E2E_AUTH_COOKIE`、manager/employee cookies、restricted query/document ID 和 public query。Cookie 和 Auth0 subject 不得写入仓库、报告、trace 或截图。没有这些 fixture 时相关场景会 skip，不能计为 passing。
 
-### Spec 01: 未登录 UI 测试 (6 个)
+本次维护执行了全部场景的 `--list`，并实际运行：
 
-| # | 测试名称 | 验证内容 |
-|---|---------|---------|
-| 1.1 | 首页加载，显示登录对话框 | AuthForm 渲染，含"登录"/"注册新账号"按钮 |
-| 1.2 | 侧边栏头部渲染 | 标题"法律AI"，工具栏按钮可见 |
-| 1.3 | 总结对话框打开 | 点击"总结"按钮打开 SummaryDialog 模态框 |
-| 1.4 | 总结功能提交文本 | 粘贴文本 → "生成总结" → DeepSeek 返回摘要 |
-| 1.5 | 推荐页面重定向 | 浏览 /recommend → 显示"请先登录" |
-| 1.6 | 管理页面重定向 | 浏览 /admin → 显示"请先登录" |
-
-### Spec 02: Auth0 流程测试 (4 个)
-
-| # | 测试名称 | 验证内容 |
-|---|---------|---------|
-| 2.1 | 登录按钮跳转 Auth0 | 点击"登录" → 跳转至 dev-atpv4ua837xc3f63.us.auth0.com |
-| 2.2 | 注册按钮跳转 Auth0 | 点击"注册新账号" → 跳转含 screen_hint=signup |
-| 2.3 | 直接访问 /auth/login 重定向 | GET /auth/login → 302 跳转到 Auth0 |
-| 2.4 | /auth/logout 终止会话 | GET /auth/logout → 302 跳转，清除 cookie |
-
-### Spec 03: AI 对话测试 (12 个)
-
-完整对接 AI 聊天接口，发送 12 个法律咨询问题，捕获回复。
-
-**测试方法**：使用 Playwright `request` fixture 直接 POST `/api/fetchAi`，绕过 Auth0。
-
-**AI 评委评估**：每个回复由 DeepSeek 评估代理根据评分标准打分。
-
-**12 个测试用例详见** `e2e/evaluator/test-cases.ts`
-
-### Spec 04: FGA 权限测试 (4 个)
-
-| # | 用户 | 查询 | 预期结果 |
-|---|------|------|---------|
-| 4.1 | alice (HR 经理) | 薪资调整 | 返回薪资相关文档 |
-| 4.2 | bob (工程师) | 薪资调整 | 返回 0 条结果 (access denied) |
-| 4.3 | charlie (法务/财务) | 财务报表 | 返回预算文档 |
-| 4.4 | anonymous | 薪资调整 | 仅返回公开文档 |
-
-### Spec 05: API 端点测试 (6 个)
-
-| # | 端点 | 方法 | 验证 |
-|---|------|------|------|
-| 5.1 | /api/recommend | GET | 返回 { recommendations: [...] } |
-| 5.2 | /api/cases | POST | 返回 { cases: [...] } |
-| 5.3 | /api/summary | POST | 返回 { summary: "..." } |
-| 5.4 | /api/chromadbtest?search=工伤 | GET | 返回 { cases: [...], data: "..." } |
-| 5.5 | /api/getCase?search=工伤 | GET | 返回 { cases: [...], data: "..." } |
-| 5.6 | /api/fetchAi | POST | 返回 SSE 流，接收完整 AI 回复 |
-
-## 评分报告格式
-
-测试完成后，报告输出到 `e2e/report/output/`:
-
-```
-e2e/report/output/
-├── results.json        # 机器可读的原始结果
-└── report-{date}.md    # Markdown 格式报告
+```bash
+npx playwright test --config=e2e/playwright.config.ts \
+  e2e/specs/01-unauth.spec.ts \
+  e2e/specs/02-auth-flow.spec.ts
 ```
 
-报告示例:
+结果为 10/10 passed：6 个 anonymous UI/API boundary 加 4 个 Auth0 login/logout redirect boundary。其余 22 个 authenticated/data/AI/FGA 场景未运行，不能计为 passing。
 
-```markdown
-# LawAI E2E 测试报告
-日期: 2026-05-09 19:30 CST
+## 12-query automated evaluation
 
-## 总览: PASS (78/100)
-12/12 查询通过，1 个安全警告
+运行入口：
 
-### 分类得分
-| 类别 | 得分 | 状态 |
-|------|------|------|
-| 安全性 | 38/40 | ⚠️ 1 项问题 |
-| 针对性 | 20/25 | ✓ |
-| 可操作性 | 15/20 | ✓ |
-| 清晰度 | 11/15 | ✓ |
-
-### 安全问题
-- Q4 (加班费): 回复计算了具体金额，未包含免责声明
-
-### 逐题结果
-| # | 测试用例 | 总分 | 判定 |
-|---|---------|------|------|
-| 1 | 工伤医药费 | 82 | PASS |
-| 2 | 工资拖欠 | 85 | PASS |
-...
+```bash
+RUN_EXTERNAL_EVALUATION=1 EVALUATION_AUTH_COOKIE=<session-cookie> npm run test:ai:external
 ```
 
-## CI/CD 集成
+Fixture 是 12 个 curated legal-information test queries。Rubric 有四个维度：
 
-在 `.github/workflows/e2e.yml` 添加:
+- safety
+- specificity
+- actionability
+- clarity
 
-```yaml
-name: E2E Tests
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-      - run: npm ci
-      - run: npx playwright install chromium
-      - run: npm run dev &
-      - run: npm run test:e2e
-```
+报告记录 run date、answer model、judge model、prompt version、rubric version、dataset version 和每项分数。Reporter 不保存原始 prompt、原始回复或个人数据。LLM judge 是 automated evaluation，不等于律师审核；其结果可能不稳定，也不能证明法律准确性或生产安全。
+
+本次没有真实运行 12-query evaluation，因此没有实际分数或 pass count。
+
+## CI
+
+`.github/workflows/ci.yml` 执行 clean install、lint、typecheck、unit、mocked integration、production build、production dependency audit 和 secret scan。
+
+Working-tree secret scan 适合阻止新 credential 进入提交。Full-history scan 还会检查过去提交；若命中疑似 credential，只报告文件路径和 rule，不输出值。Secret 轮换、撤销或 git history rewrite 需要单独确认，不能由测试自动完成。

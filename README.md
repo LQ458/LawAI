@@ -1,190 +1,129 @@
-# LawAI — Privacy-Aware Legal RAG Bot
+# LawAI
 
-AI-powered legal assistant with **Auth0 FGA fine-grained authorization** — sources answers from a document database (RAG) while enforcing document-level access based on user role and department.
+LawAI 是一个 privacy-aware legal RAG technical prototype，用于验证 Auth0 会话身份、Auth0 FGA 文档授权、Pinecone 候选检索、MongoDB 权威元数据和 DeepSeek 生成之间的安全边界。
 
-> 🏆 Built for the Auth0 FGA challenge: demonstrate that a manager can access salary documents, but a general employee cannot, even if the document is in the RAG index.
+它不是公开法律服务，不提供正式法律意见，也没有经过律师审核、专业法律准确性验证或生产安全认证。法律和程序会随地区与时间变化；高风险事项应核对当地最新官方资料，并咨询合格律师、官方法律援助机构或相关主管部门。
 
-## FGA Demo (30 seconds)
+## 当前边界
 
-```bash
-npx tsx scripts/demo-fga.ts
+- 普通聊天：`POST /api/fetchAi`，需要 Auth0 会话。该路径没有检索资料，回复不得描述为 RAG-grounded。
+- Grounded RAG：`POST /api/rag-search`，请求体仅接受有长度限制的 `{ "query": "..." }`。客户端提供的 `userId` 不参与身份或授权。
+- 文档可见性：只有显式 `visibility: public` 的记录可匿名访问。缺失或非法 metadata 不会被推断为 public。
+- Restricted 文档：必须包含稳定 `documentId`、`department`、`sensitivity` 和 raw `fgaObjectId`。FGA 未配置、token 失败、超时或响应异常时 fail closed。
+- 检索顺序：Pinecone 只返回候选 ID；MongoDB 提供权威授权 metadata 和受控长度内容；FGA 过滤完成后，获准内容才会进入 DeepSeek context。
+- 来源：grounded response 只返回获准的结构化 sources，并要求答案使用 `[DOC:documentId]` 引用。证据不足时返回明确的信息不足说明。
+- Chat ownership：读取、更新和删除都同时绑定 MongoDB chat ID 与当前 Auth0 subject。
+- Admin：`/admin` 和 `/api/admin/activity` 在服务端检查 Auth0 permission、role 或显式管理员 subject allowlist；未登录为 401，已登录非管理员为 403。
+- 活动数据：只接受有频率与大小限制的 client-reported allowlist action/metadata，不保存 prompt、法律问题正文、模型回复、token 或 email。`activeUsers` 定义为指定窗口内提交过获准记录行为的 distinct authenticated Auth0 subjects；它不是 registered accounts、visitors 或独立分析平台的 DAU。
+
+## 架构
+
+| 层                     | 实现                                 |
+| ---------------------- | ------------------------------------ |
+| Web                    | Next.js 15、React 19、TypeScript     |
+| Authentication         | Auth0 server-side session            |
+| Document authorization | Auth0 FGA                            |
+| Candidate retrieval    | Pinecone Inference + namespace query |
+| Authoritative records  | MongoDB + Mongoose                   |
+| Generation             | DeepSeek via OpenAI SDK              |
+| UI                     | PrimeReact + Tailwind CSS            |
+
+Grounded RAG 的安全顺序是：
+
+```text
+POST query
+  -> Auth0 server session
+  -> Pinecone candidate IDs
+  -> MongoDB authoritative metadata/content
+  -> explicit-public or FGA viewer check
+  -> bounded authorized context
+  -> DeepSeek answer
+  -> authorized-only sources
 ```
 
-See `docs/fga-demo.md` for the full architecture and code walkthrough.
+Auth0 subject 使用服务端统一映射为 FGA user object；该值不能由请求 query、header 或 body 指定。FGA authorization model 位于 `fga/model.fga`。
 
-**Expected output:**
-```
-user:alice can VIEW doc-salary-q4-2025 → ✅ ALLOWED
-user:bob   can VIEW doc-salary-q4-2025 → ❌ DENIED
-```
-
-## Features
-
-### Privacy-Aware RAG
-- Pinecone vector search with built-in inference embedding
-- Auth0 FGA filters documents by user role/department before sending to LLM
-- Manager vs employee access demo: HR manager sees salary docs, engineer gets denied
-
-### AI Chat
-- DeepSeek Chat API for streaming legal Q&A (SSE)
-- System prompt tuned for Chinese migrant worker legal assistance
-- Asks for specific details before giving advice (time, location, employer, evidence)
-
-### Text Summarization
-- DeepSeek-powered inline summary dialog — no separate page needed
-- Accessible from main chat and recommendation pages
-
-### Admin Dashboard
-- `/admin` — user activity tracking (DAU, top users, query volume)
-- Activity scoring: logins × 10 + queries × 5 + interactions × 1
-- Charts, tables, recent activity feed
-
-### Authentication
-- Auth0 Universal Login — polished OAuth flow with social login support
-- Server-side session management via `@auth0/nextjs-auth0@4.x`
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 15, React 19, TypeScript |
-| Auth | Auth0 (`@auth0/nextjs-auth0@4`) |
-| Authorization | Auth0 FGA (fine-grained document access) |
-| AI Chat | DeepSeek Chat API (OpenAI SDK) |
-| Embeddings | Pinecone Inference (`multilingual-e5-large`) |
-| Vector DB | Pinecone |
-| Database | MongoDB (Mongoose) |
-| UI | PrimeReact + TailwindCSS |
-
-## Quick Start
+## 本地启动
 
 ```bash
 git clone https://github.com/LQ458/LawAI.git
 cd LawAI
-npm install
-cp .env.local.example .env.local   # then fill in real values
+npm ci
+cp .env.local.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+`.env.local.example` 只包含 placeholder。不要提交真实 secret、连接字符串、Auth0 subject、cookie 或 token。
 
-## Environment Variables
+主要配置：
 
-See `.env.local.example` for the full template. Key variables:
+| 类别     | 变量                                                                                     |
+| -------- | ---------------------------------------------------------------------------------------- |
+| Auth0    | `APP_BASE_URL`, `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_SECRET` |
+| Admin    | `AUTH0_ADMIN_PERMISSION`, `AUTH0_ADMIN_ROLE`, claim names；可选 `ADMIN_AUTH0_SUBJECTS`   |
+| FGA      | `AUTH0_FGA_API_URL`, `AUTH0_FGA_AUDIENCE`, store/client credentials, timeout             |
+| MongoDB  | `MONGODB_URL`, `MONGODB_AUTO_INDEX`                                                      |
+| Pinecone | API key, host, index, namespace, embedding model                                         |
+| DeepSeek | `DEEPSEEK_API_KEY`, `AI_MODEL`                                                           |
 
-| Variable | Description |
-|----------|-------------|
-| `AUTH0_DOMAIN` | Auth0 tenant domain |
-| `AUTH0_CLIENT_ID` / `AUTH0_CLIENT_SECRET` | Auth0 application credentials |
-| `AUTH0_SECRET` | 64-char random string for session encryption |
-| `AUTH0_FGA_STORE_ID` / `AUTH0_FGA_CLIENT_ID` / `AUTH0_FGA_CLIENT_SECRET` | Auth0 FGA credentials |
-| `DEEPSEEK_API_KEY` | DeepSeek API key |
-| `MONGODB_URL` | MongoDB connection string |
-| `PINECONE_API_KEY` / `HOST_ADD` | Pinecone vector database |
-| `PINECONE_EMBEDDING_MODEL` | Embedding model (default: `multilingual-e5-large`) |
+## 数据与 ingestion
 
-## Project Structure
+`Record` 明确区分：
 
-```
-LawAI/
-├── app/
-│   ├── admin/                  # Admin dashboard
-│   ├── api/
-│   │   ├── admin/activity/     # Activity stats API
-│   │   ├── cases/              # Case listing, like, bookmark
-│   │   ├── chromadbtest/       # RAG search + FGA filter
-│   │   ├── fetchAi/            # Streaming AI chat
-│   │   ├── getCase/            # MongoDB text search
-│   │   ├── getChats/           # Chat history
-│   │   ├── deleteChat/         # Delete chat
-│   │   ├── updateChatTitle/    # Rename chat
-│   │   ├── recommend/          # Recommendation engine
-│   │   ├── summary/            # Text summarization (DeepSeek)
-│   │   └── user-action/        # User interaction tracking
-│   ├── recommend/              # Case recommendation page
-│   └── page.tsx                # Main chat page
-├── components/
-│   ├── AuthForm.tsx            # Auth0 login/signup dialog
-│   ├── ChatComponent.tsx       # Chat bubble + RAG results
-│   ├── ChatHeader.tsx          # Sidebar header
-│   ├── ChatList.tsx            # Chat list
-│   ├── SummaryDialog.tsx       # Inline summarization modal
-│   └── ...
-├── lib/
-│   ├── auth0.ts                # Auth0 client init
-│   ├── fga.ts                  # FGA check/write utilities
-│   ├── docAccess.ts            # Document access filter
-│   ├── demoData.ts             # Demo users/documents/FGA tuples
-│   └── mongodb.ts              # MongoDB connection
-├── models/                     # Mongoose schemas
-├── hooks/                      # Custom React hooks
-├── e2e/                        # Playwright E2E tests + AI evaluator
-│   ├── specs/                  # 32 test cases (5 specs)
-│   ├── evaluator/              # AI judge scoring pipeline
-│   └── report/                 # Report generator
-├── docs/
-│   ├── testing-procedure.md    # Full testing documentation
-│   └── safety-guidelines.md    # Legal AI safety standards
-└── scripts/
-    └── seed-fga.ts             # Seed FGA tuples for demo
-```
+- `visibility`: `public | restricted`
+- `sourceKind`: `source-derived | synthetic`
+- provenance: `source`, `sourceUrl`, `version`
+- authorization: `documentId`，以及 restricted 所需的 `department`, `sensitivity`, `fgaObjectId`
 
-## E2E Testing
+CAIL2018 loader 将 source-derived 数据标注为 CAIL2018 并保留数据集来源 URL；它不等于本项目对数据许可或法律准确性作出额外保证。生成脚本只创建明确标注的 synthetic/example cases，不将其描述为真实裁判案例；合成数据的 views/likes/bookmarks 不作为真实用户指标。
+
+安全的数据命令：
 
 ```bash
-npm run test:e2e        # All 32 Playwright tests
-npm run test:e2e:ui     # Interactive UI mode
-npm run test:ai         # AI evaluation pipeline (queries → DeepSeek judge → report)
+# 默认只读，只输出分类数量
+npm run data:migrate:dry-run
+
+# 只读聚合，不输出正文、标题或 ID
+npm run data:evidence
+
+# 查看 ingestion 参数；支持 dry-run、batch、resume、checkpoint
+npx tsx scripts/ingest-pinecone.ts --help
 ```
 
-See `docs/testing-procedure.md` for full details.
+Migration 的 `--apply` 只写 MongoDB metadata；Pinecone 重新同步是独立步骤。namespace delete/clear 必须同时提供 destructive confirmation 和 backup acknowledgement；不要在未备份、未明确授权时清空 production namespace。
 
-## FGA Access Control Demo
+Migration 只把有可信 CAIL2018 provenance 或已有显式 public 标记的已识别记录归为 public。仅匹配旧 CAIL/synthetic 数据形态但缺少显式可见性或可信 provenance 的记录保持 `restricted` 并标记 `needsReview`；已有 `restricted` 永不被降级。
 
-The RAG pipeline enforces document-level access:
+## 测试
 
-| User | Role | Query | Result |
-|------|------|-------|--------|
-| Alice | HR Manager | 薪资调整 | Sees salary docs |
-| Bob | Engineer | 薪资调整 | Access denied |
-| Charlie | Legal/Finance | 财务报表 | Sees budget docs |
-| Anonymous | — | 薪资调整 | Only public docs |
+2026-07-23 在本地执行的 mocked/default suites：
 
-FGA authorization model:
-```
-type user
-type document
-  relations
-    define viewer: user or viewer from department
-type department
-  relations
-    define member: user
-```
+| 命令                       | 实际结果                          |
+| -------------------------- | --------------------------------- |
+| `npm run test:unit`        | 11 suites，47 tests passed        |
+| `npm run test:integration` | 1 suite，5 tests passed           |
+| `npm test`                 | 12 suites，52 unique tests passed |
 
-Seed demo data: `npx tsx scripts/seed-fga.ts`
+这些测试不依赖真实 Auth0、FGA、MongoDB、Pinecone 或 DeepSeek credential。覆盖伪造 `userId`、explicit-public anonymous access、restricted allow/deny、FGA fail-closed、denied context exclusion、authorized-only citations、chat ownership、admin 403、输入边界和外部服务错误。
 
-## AI Evaluation Framework
+Playwright 当前可发现 32 个场景。本次实际运行并通过了 10 个浏览器场景：6 个 anonymous UI/API boundary 和 4 个 Auth0 login/logout redirect boundary。其余 22 个需要 MongoDB、DeepSeek、受控 Auth0 session 或 FGA fixtures，本次没有运行，不能计为 passing。详见 `docs/testing-procedure.md`。
 
-The `e2e/evaluator/` pipeline uses DeepSeek as a judge to score AI responses across 4 categories:
+## 12-query automated evaluation
 
-| Category | Weight | What |
-|----------|--------|------|
-| Safety | 40% | No harmful/illegal advice, disclaimers present |
-| Specificity | 25% | Asks for details first, cites correct laws |
-| Actionability | 20% | Concrete steps, official contact info |
-| Clarity | 15% | Accessible language, clear structure |
+`e2e/` 保留 12 个 curated legal-information test queries，按 safety、specificity、actionability、clarity 四个维度由 LLM judge 自动评分。报告记录日期、answer/judge model、prompt/rubric/dataset version 和逐项结果，但不保存原始用户 prompt 或模型回复。
 
-12 curated legal queries covering workplace injury, wage disputes, contracts, social insurance, overtime, severance, and more.
+Automated evaluation 不等于律师审核。本次没有运行 12-query evaluation，因此仓库不展示示例分数为真实结果。
 
-See `docs/safety-guidelines.md` for the full safety rubric.
+## 验证与证据
 
-## Deploy to Vercel
+- 测试流程：`docs/testing-procedure.md`
+- FGA 模型与 demo：`docs/fga-demo.md`
+- 法律信息与 evaluation 边界：`docs/safety-guidelines.md`
+- 本次无个人数据 evidence report：`docs/evidence-report-2026-07-23.md`
 
-1. Push to GitHub
-2. Import in Vercel (auto-detects Next.js)
-3. Set all environment variables from `.env.local.example`
-4. Add `https://<your-domain>/auth/callback` to Auth0 allowed callback URLs
-5. Deploy
+## 部署
+
+仓库当前没有已关联的本地 Vercel project metadata，因此本次未创建 preview，也没有可验证的公开 deployment、Web Analytics 或 traffic/account metrics。若以后关联项目，只应先创建 preview，配置 Auth0 callback，并验证 public retrieval、restricted allow/deny、chat ownership 和 admin 403；不要未经明确授权把它公开部署为法律咨询服务。
 
 ## License
 
