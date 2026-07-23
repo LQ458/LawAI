@@ -1,77 +1,18 @@
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import secretScan from "./lib/secret-scan.cjs";
 
 const MAX_BUFFER_BYTES = 40 * 1024 * 1024;
 const MAX_HISTORY_BLOBS = 20_000;
 const MAX_BLOB_BYTES = 2 * 1024 * 1024;
 const scanGitHistory = !process.argv.includes("--working-tree-only");
+const { scanText } = secretScan;
 
 function git(args, options = {}) {
   return spawnSync("git", args, {
     encoding: options.encoding || "utf8",
     maxBuffer: MAX_BUFFER_BYTES,
   });
-}
-
-const rules = [
-  {
-    name: "private-key",
-    pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  },
-  {
-    name: "github-token",
-    pattern: /\b(?:ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b/,
-  },
-  { name: "openai-style-key", pattern: /\bsk-[A-Za-z0-9_-]{32,}\b/ },
-  { name: "pinecone-key", pattern: /\bpcsk_[A-Za-z0-9_-]{24,}\b/ },
-  { name: "slack-token", pattern: /\bxox[baprs]-[A-Za-z0-9-]{20,}\b/ },
-  { name: "aws-access-key", pattern: /\bAKIA[0-9A-Z]{16}\b/ },
-  {
-    name: "credentialed-mongodb-uri",
-    pattern: /mongodb(?:\+srv)?:\/\/[^:@/\s]+:[^@/\s]+@/i,
-  },
-];
-
-const sensitiveAssignment =
-  /\b(?:AUTH0_CLIENT_SECRET|AUTH0_SECRET|AUTH0_FGA_CLIENT_SECRET|DEEPSEEK_API_KEY|PINECONE_API_KEY|MONGODB_URL)\s*=\s*([^\s#]+)/g;
-const placeholder =
-  /^(?:["']?(?:|placeholder|replace-me|example|test(?:[_-].*)?|ci(?:[_-].*)?|your[_-].*|<.*>|\.\.\.|\$\{.*\})["']?)$/i;
-
-function isPlaceholderValue(value) {
-  return (
-    placeholder.test(value) ||
-    /(?:placeholder|username:password|your[-_.]|example\.invalid|<[^>]+>)/i.test(
-      value,
-    )
-  );
-}
-
-function scanText(path, text, scope, findings) {
-  for (const rule of rules) {
-    const match = text.match(rule.pattern);
-    if (
-      match &&
-      !(
-        rule.name === "credentialed-mongodb-uri" &&
-        /username:password|<[^>]+>/i.test(match[0])
-      )
-    ) {
-      findings.push({ path, rule: rule.name, scope });
-    }
-  }
-
-  for (const match of text.matchAll(sensitiveAssignment)) {
-    const value = match[1].replace(/[;,]$/, "").replace(/^["']|["']$/g, "");
-    if (
-      value &&
-      !isPlaceholderValue(value) &&
-      !value.includes("process.env") &&
-      !value.startsWith("env.")
-    ) {
-      findings.push({ path, rule: "sensitive-env-assignment", scope });
-      break;
-    }
-  }
 }
 
 function scanWorkingTree(findings) {
