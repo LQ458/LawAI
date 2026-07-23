@@ -15,7 +15,7 @@ LawAI 是 technical prototype。普通聊天和 grounded RAG 都只提供一般�
 
 `/api/fetchAi` 是普通聊天，没有 retrieval。它不能声称已查阅资料、核实法律或提供来源。
 
-`/api/rag-search` 只有在 Pinecone 候选检索、MongoDB 权威 metadata/content lookup 和 authorization filter 都完成后才是 grounded RAG。回答必须引用获准 sources；被拒绝内容不能影响模型 context 或 API response。
+`/api/rag-search` 只有在 Pinecone 候选检索、MongoDB 权威 authorization metadata lookup、authorization filter 和 authorized-only content lookup 都完成后才是 grounded RAG。回答必须引用获准 sources；被拒绝内容不能影响模型 context 或 API response。
 
 ## Automated evaluation rubric
 

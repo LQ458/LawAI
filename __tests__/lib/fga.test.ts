@@ -1,14 +1,28 @@
 /** @jest-environment node */
 
 import { fgaCheck, resetFgaTokenCache } from "@/lib/fga";
+import { REQUIRED_FGA_MODEL } from "@/lib/fgaModel";
 
 const configKeys = [
   "AUTH0_FGA_STORE_ID",
   "AUTH0_FGA_CLIENT_ID",
   "AUTH0_FGA_CLIENT_SECRET",
-  "AUTH0_DOMAIN",
   "AUTH0_FGA_API_URL",
+  "AUTH0_FGA_AUDIENCE",
+  "AUTH0_FGA_TOKEN_ISSUER",
 ] as const;
+
+function modelResponse() {
+  return Response.json({
+    authorization_models: [
+      {
+        id: "model-placeholder",
+        ...REQUIRED_FGA_MODEL,
+      },
+    ],
+    continuation_token: "",
+  });
+}
 
 describe("FGA fail-closed behavior", () => {
   const original: Partial<Record<(typeof configKeys)[number], string>> = {};
@@ -25,8 +39,9 @@ describe("FGA fail-closed behavior", () => {
     process.env.AUTH0_FGA_STORE_ID = "store-placeholder";
     process.env.AUTH0_FGA_CLIENT_ID = "client-placeholder";
     process.env.AUTH0_FGA_CLIENT_SECRET = "secret-placeholder";
-    process.env.AUTH0_DOMAIN = "tenant.example.invalid";
     process.env.AUTH0_FGA_API_URL = "https://fga.example.invalid";
+    process.env.AUTH0_FGA_AUDIENCE = "https://fga.example.invalid";
+    process.env.AUTH0_FGA_TOKEN_ISSUER = "auth.example.invalid";
   });
 
   afterEach(() => {
@@ -69,6 +84,14 @@ describe("FGA fail-closed behavior", () => {
         object: "document:restricted",
       }),
     ).resolves.toBe(false);
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://auth.example.invalid/oauth/token",
+      expect.objectContaining({
+        body: expect.stringContaining(
+          '"audience":"https://fga.example.invalid/"',
+        ),
+      }),
+    );
   });
 
   it("denies malformed check responses", async () => {
@@ -76,6 +99,7 @@ describe("FGA fail-closed behavior", () => {
       .mockResolvedValueOnce(
         Response.json({ access_token: "token", expires_in: 300 }),
       )
+      .mockResolvedValueOnce(modelResponse())
       .mockResolvedValueOnce(Response.json({ allowed: "yes" }));
 
     await expect(
@@ -106,5 +130,56 @@ describe("FGA fail-closed behavior", () => {
     });
     await jest.advanceTimersByTimeAsync(501);
     await expect(decision).resolves.toBe(false);
+  });
+
+  it("denies when the store model is missing or ambiguous", async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(
+        Response.json({ access_token: "token", expires_in: 300 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          authorization_models: [],
+          continuation_token: "",
+        }),
+      );
+
+    await expect(
+      fgaCheck({
+        user: "user:auth0_test",
+        relation: "viewer",
+        object: "document:restricted",
+      }),
+    ).resolves.toBe(false);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("pins a successful check to the verified model", async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(
+        Response.json({ access_token: "token", expires_in: 300 }),
+      )
+      .mockResolvedValueOnce(modelResponse())
+      .mockResolvedValueOnce(Response.json({ allowed: true }));
+
+    await expect(
+      fgaCheck({
+        user: "user:auth0_test",
+        relation: "viewer",
+        object: "restricted",
+      }),
+    ).resolves.toBe(true);
+
+    const checkRequest = (global.fetch as jest.Mock).mock.calls[2][1] as {
+      body: string;
+    };
+    expect(JSON.parse(checkRequest.body)).toMatchObject({
+      authorization_model_id: "model-placeholder",
+      tuple_key: {
+        user: "user:auth0_test",
+        relation: "viewer",
+        object: "document:restricted",
+      },
+    });
   });
 });

@@ -34,9 +34,9 @@ Migration 的预期分类区分 trusted CAIL2018 public、explicit public synthe
 
 | 类别                          |  实际结果 | Source / time                          | Definition                                        | Limitation                                               |
 | ----------------------------- | --------: | -------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- |
-| Unit/API/component            | 47 passed | `npm run test:unit`, 2026-07-23        | Jest tests outside `__tests__/integration`        | mocked；不验证真实外部服务                               |
+| Unit/API/component            | 53 passed | `npm run test:unit`, 2026-07-23        | Jest tests outside `__tests__/integration`        | mocked；不验证真实外部服务                               |
 | Authorization/RAG integration |  5 passed | `npm run test:integration`, 2026-07-23 | mocked integration tests                          | mocked Auth0/FGA/Mongo/Pinecone/DeepSeek                 |
-| Default Jest total            | 52 passed | `npm test`, 2026-07-23                 | 12 suites / 52 unique tests                       | 不含 Playwright                                          |
+| Default Jest total            | 58 passed | `npm test`, 2026-07-23                 | 13 suites / 58 unique tests                       | 不含 Playwright                                          |
 | Playwright discovered         |        32 | Playwright `--list`, 2026-07-23        | runtime scenarios in 5 files                      | discovery/review，不是 passing count                     |
 | Playwright actually passed    | 10 passed | specs 01/02, 2026-07-23                | 6 anonymous boundary + 4 Auth0 redirect scenarios | remaining 22 authenticated/data/AI/FGA scenarios not run |
 | 12-query evaluation           |   not run | external evaluation gate, 2026-07-23   | 12 curated queries with four-dimension LLM judge  | 没有真实分数；不等于律师审核                             |
@@ -49,17 +49,19 @@ Migration 的预期分类区分 trusted CAIL2018 public、explicit public synthe
 | `npm run lint`                          | passed; 0 warnings/errors                  | ESLint scope is the repository configuration                                                                     |
 | `npm run typecheck`                     | passed                                     | application TypeScript                                                                                           |
 | `npx tsc -p e2e/tsconfig.json --noEmit` | passed                                     | E2E/evaluator TypeScript only                                                                                    |
-| `npm run test:unit`                     | 11 suites / 47 passed                      | mocked; no live credentials                                                                                      |
+| `npm run test:unit`                     | 12 suites / 53 passed                      | mocked; no live credentials                                                                                      |
 | `npm run test:integration`              | 1 suite / 5 passed                         | mocked authorization/RAG services                                                                                |
-| `npm test`                              | 12 suites / 52 unique tests passed         | Jest excludes `e2e/`                                                                                             |
+| `npm test`                              | 13 suites / 58 unique tests passed         | Jest excludes `e2e/`                                                                                             |
 | `npm run build`                         | passed; 21 static/dynamic routes generated | local Node emitted a non-fatal experimental type-stripping warning                                               |
 | model schema load check                 | passed with no duplicate-index warning     | loads Record, UserActivity, Like, Bookmark and Chat schemas; does not create external indexes                    |
 | `npm run audit:prod`                    | 0 production vulnerabilities               | registry result at run time; development deprecations are not production audit findings                          |
-| `npm run scan:secrets:working-tree`     | passed; 132 files scanned                  | current committed working tree only                                                                              |
+| `npm run scan:secrets:working-tree`     | passed; 136 files scanned                  | current working tree, including the new FGA model/tool files                                                     |
 | `npm run scan:secrets`                  | exit 1; two potential history findings     | values intentionally suppressed; see below                                                                       |
 | Playwright `--list`                     | 32 scenarios in 5 files                    | discovery only                                                                                                   |
 | Playwright specs 01/02                  | 10/10 passed                               | real browser run against local production server; redirect boundary only, not an authenticated callback session  |
 | ingestion/seed/FGA `--dry-run` commands | passed; zero external writes               | fixture counts are not production dataset counts                                                                 |
+| `npm run fga:model:status`              | passed; 1 model / ready                    | live read-only aggregate; identifiers omitted                                                                    |
+| `npm run fga:model:apply`               | passed as zero-write no-op after creation  | live store has exactly one required model; no tuple read/write                                                   |
 | Pinecone destructive dry run            | planned one namespace delete, writes 0     | no delete executed                                                                                               |
 | Pinecone delete without confirmations   | correctly refused before external call     | requires both backup and destructive confirmations                                                               |
 
@@ -85,11 +87,27 @@ No value was printed or inspected during this report. Whether each match is a re
 - ingestion/migration commands expose dry-run, batch, resume/checkpoint and destructive confirmation boundaries.
 - explicit restricted synthetic records are preserved by migration; unverified legacy CAIL/synthetic shapes remain restricted/needs-review;
 - RAG performs metadata-only lookup and authorization before an authorized-only content query.
+- FGA runtime verifies exactly one semantically matching model and pins check/write requests to its model ID.
+
+## Live FGA evidence
+
+The configured FGA endpoint was checked without printing any environment value or identifier:
+
+| Evidence                    | Result                             | Definition / limitation                                                                                  |
+| --------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Client credential exchange  | passed                             | live token request; token and client identifiers omitted                                                 |
+| Initial authorization model | 0 models                           | read-only state immediately before creation                                                              |
+| Model creation              | 1 required model created           | one immutable model write; no relationship tuple read/write                                              |
+| Final model state           | exactly 1 / semantic state `ready` | service-added empty/default JSON fields are normalized; non-empty extra policy fields still cause unsafe |
+| Repeat apply                | passed with 0 external writes      | idempotent no-op because the exact unique model already exists                                           |
+| No-tuple deny smoke         | `allowed=false`                    | placeholder subject/object only; not a real manager/employee authorization test                          |
+
+The service accepted the first model write, but the initial local post-write verifier returned exit 1 because it compared service-added semantically empty fields byte-for-byte. A read-only check confirmed exactly one model, the verifier was narrowed to normalize only empty/default service fields, and the final status plus repeat apply passed without a second write. No subject, tuple, store ID, model ID, token or credential was printed or stored in this report.
 
 ## Not verified against live services
 
 - Real Auth0 callback and role/permission claim shape;
-- real FGA model deployment, token exchange and manager/employee tuple decisions;
+- real manager/employee subject mapping, relationship tuples and allow/deny decisions;
 - MongoDB metadata category counts and schema migration result;
 - MongoDB–Pinecone document ID coverage;
 - real DeepSeek grounded answer quality;

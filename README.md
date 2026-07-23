@@ -10,6 +10,7 @@ LawAI 是一个 privacy-aware legal RAG technical prototype，用于验证 Auth0
 - Grounded RAG：`POST /api/rag-search`，请求体仅接受有长度限制的 `{ "query": "..." }`。客户端提供的 `userId` 不参与身份或授权。
 - 文档可见性：只有显式 `visibility: public` 的记录可匿名访问。缺失或非法 metadata 不会被推断为 public。
 - Restricted 文档：必须包含稳定 `documentId`、`department`、`sensitivity` 和 raw `fgaObjectId`。FGA 未配置、token 失败、超时或响应异常时 fail closed。
+- FGA model：restricted check 前会确认 store 中恰好存在一个与仓库模型语义一致的 authorization model，并把 check 显式绑定到该 model ID；空、冲突或多个 model 均 fail closed。
 - 检索顺序：Pinecone 只返回候选 ID；MongoDB 提供权威授权 metadata 和受控长度内容；FGA 过滤完成后，获准内容才会进入 DeepSeek context。
 - 来源：grounded response 只返回获准的结构化 sources，并要求答案使用 `[DOC:documentId]` 引用。证据不足时返回明确的信息不足说明。
 - Chat ownership：读取、更新和删除都同时绑定 MongoDB chat ID 与当前 Auth0 subject。
@@ -34,14 +35,15 @@ Grounded RAG 的安全顺序是：
 POST query
   -> Auth0 server session
   -> Pinecone candidate IDs
-  -> MongoDB authoritative metadata/content
+  -> MongoDB authorization metadata only
   -> explicit-public or FGA viewer check
+  -> MongoDB content for authorized IDs only
   -> bounded authorized context
   -> DeepSeek answer
   -> authorized-only sources
 ```
 
-Auth0 subject 使用服务端统一映射为 FGA user object；该值不能由请求 query、header 或 body 指定。FGA authorization model 位于 `fga/model.fga`。
+Auth0 subject 使用服务端统一映射为 FGA user object；该值不能由请求 query、header 或 body 指定。可部署的 FGA API JSON 位于 `fga/model.json`，对应 DSL 位于 `fga/model.fga`。
 
 ## 本地启动
 
@@ -61,7 +63,7 @@ npm run dev
 | -------- | ---------------------------------------------------------------------------------------- |
 | Auth0    | `APP_BASE_URL`, `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_SECRET` |
 | Admin    | `AUTH0_ADMIN_PERMISSION`, `AUTH0_ADMIN_ROLE`, claim names；可选 `ADMIN_AUTH0_SUBJECTS`   |
-| FGA      | `AUTH0_FGA_API_URL`, `AUTH0_FGA_AUDIENCE`, store/client credentials, timeout             |
+| FGA      | API URL、token issuer、audience、store/client credentials、timeout                       |
 | MongoDB  | `MONGODB_URL`, `MONGODB_AUTO_INDEX`                                                      |
 | Pinecone | API key, host, index, namespace, embedding model                                         |
 | DeepSeek | `DEEPSEEK_API_KEY`, `AI_MODEL`                                                           |
@@ -100,13 +102,15 @@ Migration 只把有可信 CAIL2018 provenance 或已有显式 public 标记的�
 
 | 命令                       | 实际结果                          |
 | -------------------------- | --------------------------------- |
-| `npm run test:unit`        | 11 suites，47 tests passed        |
+| `npm run test:unit`        | 12 suites，53 tests passed        |
 | `npm run test:integration` | 1 suite，5 tests passed           |
-| `npm test`                 | 12 suites，52 unique tests passed |
+| `npm test`                 | 13 suites，58 unique tests passed |
 
 这些测试不依赖真实 Auth0、FGA、MongoDB、Pinecone 或 DeepSeek credential。覆盖伪造 `userId`、explicit-public anonymous access、restricted allow/deny、FGA fail-closed、denied context exclusion、authorized-only citations、chat ownership、admin 403、输入边界和外部服务错误。
 
 Playwright 当前可发现 32 个场景。本次实际运行并通过了 10 个浏览器场景：6 个 anonymous UI/API boundary 和 4 个 Auth0 login/logout redirect boundary。其余 22 个需要 MongoDB、DeepSeek、受控 Auth0 session 或 FGA fixtures，本次没有运行，不能计为 passing。详见 `docs/testing-procedure.md`。
+
+配置指向的 FGA store 已完成 token exchange、只读 model 查询、一次空-store model 创建和写后验证；当前恰好一个所需 model。未写入用户/department/document tuple，也没有 manager/employee session，因此这不等于 restricted allow/deny E2E 已通过。
 
 ## 12-query automated evaluation
 

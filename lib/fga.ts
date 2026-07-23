@@ -1,6 +1,12 @@
 import "server-only";
 
+import {
+  getFgaModelStoreState,
+  type FgaAuthorizationModel,
+} from "@/lib/fgaModel";
+
 const DEFAULT_FGA_API_URL = "https://api.us1.fga.dev";
+const DEFAULT_FGA_TOKEN_ISSUER = "auth.fga.dev";
 const DEFAULT_FGA_TIMEOUT_MS = 5_000;
 
 interface FgaCheckRequest {
@@ -17,18 +23,28 @@ interface FgaTuple {
 
 let fgaAccessToken: string | null = null;
 let fgaTokenExpiry = 0;
+let fgaAuthorizationModelId: string | null = null;
 
 function fgaConfig() {
+  const apiUrl = (process.env.AUTH0_FGA_API_URL || DEFAULT_FGA_API_URL).replace(
+    /\/+$/,
+    "",
+  );
+  const tokenIssuer = (
+    process.env.AUTH0_FGA_TOKEN_ISSUER || DEFAULT_FGA_TOKEN_ISSUER
+  )
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+  const configuredAudience = process.env.AUTH0_FGA_AUDIENCE || apiUrl;
   return {
     storeId: process.env.AUTH0_FGA_STORE_ID || "",
     clientId: process.env.AUTH0_FGA_CLIENT_ID || "",
     clientSecret: process.env.AUTH0_FGA_CLIENT_SECRET || "",
-    auth0Domain: process.env.AUTH0_DOMAIN || "",
-    apiUrl: process.env.AUTH0_FGA_API_URL || DEFAULT_FGA_API_URL,
-    audience:
-      process.env.AUTH0_FGA_AUDIENCE ||
-      process.env.AUTH0_FGA_API_URL ||
-      DEFAULT_FGA_API_URL,
+    tokenIssuer,
+    apiUrl,
+    audience: configuredAudience.endsWith("/")
+      ? configuredAudience
+      : `${configuredAudience}/`,
   };
 }
 
@@ -48,7 +64,7 @@ function isConfigured(
     config.storeId &&
     config.clientId &&
     config.clientSecret &&
-    config.auth0Domain &&
+    config.tokenIssuer &&
     config.apiUrl,
   );
 }
@@ -107,7 +123,7 @@ async function getFgaToken(): Promise<string> {
   }
 
   const { response, payload } = await fetchJsonWithTimeout(
-    `https://${config.auth0Domain}/oauth/token`,
+    `https://${config.tokenIssuer}/oauth/token`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -145,6 +161,47 @@ async function getFgaToken(): Promise<string> {
   return accessToken;
 }
 
+async function getRequiredAuthorizationModelId(
+  token: string,
+  config: ReturnType<typeof fgaConfig>,
+): Promise<string> {
+  if (fgaAuthorizationModelId) return fgaAuthorizationModelId;
+
+  const { response, payload } = await fetchJsonWithTimeout(
+    `${config.apiUrl}/stores/${encodeURIComponent(
+      config.storeId,
+    )}/authorization-models?page_size=2`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  if (!response.ok || !payload || typeof payload !== "object") {
+    throw new Error("FGA authorization model request failed");
+  }
+
+  const parsed = payload as Record<string, unknown>;
+  if (
+    !Array.isArray(parsed.authorization_models) ||
+    (typeof parsed.continuation_token === "string" &&
+      parsed.continuation_token.length > 0)
+  ) {
+    throw new Error("FGA authorization model response was invalid");
+  }
+
+  const models = parsed.authorization_models as FgaAuthorizationModel[];
+  if (
+    getFgaModelStoreState(models) !== "ready" ||
+    typeof models[0]?.id !== "string" ||
+    !models[0].id
+  ) {
+    throw new Error("FGA authorization model is missing or unsafe");
+  }
+
+  fgaAuthorizationModelId = models[0].id;
+  return fgaAuthorizationModelId;
+}
+
 function normalizeDocumentObject(object: string): string {
   return object.startsWith("document:") ? object : `document:${object}`;
 }
@@ -165,8 +222,12 @@ export async function fgaCheck({
 
   try {
     const token = await getFgaToken();
+    const authorizationModelId = await getRequiredAuthorizationModelId(
+      token,
+      config,
+    );
     const { response, payload } = await fetchJsonWithTimeout(
-      `${config.apiUrl}/stores/${config.storeId}/check`,
+      `${config.apiUrl}/stores/${encodeURIComponent(config.storeId)}/check`,
       {
         method: "POST",
         headers: {
@@ -174,6 +235,7 @@ export async function fgaCheck({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          authorization_model_id: authorizationModelId,
           tuple_key: {
             user,
             relation,
@@ -207,8 +269,12 @@ export async function fgaWriteTuples(tuples: FgaTuple[]): Promise<void> {
   }
 
   const token = await getFgaToken();
+  const authorizationModelId = await getRequiredAuthorizationModelId(
+    token,
+    config,
+  );
   const response = await fetchWithTimeout(
-    `${config.apiUrl}/stores/${config.storeId}/write`,
+    `${config.apiUrl}/stores/${encodeURIComponent(config.storeId)}/write`,
     {
       method: "POST",
       headers: {
@@ -216,6 +282,7 @@ export async function fgaWriteTuples(tuples: FgaTuple[]): Promise<void> {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
+        authorization_model_id: authorizationModelId,
         writes: tuples.map((tuple) => ({
           tuple_key: {
             user: tuple.user,
@@ -235,4 +302,5 @@ export async function fgaWriteTuples(tuples: FgaTuple[]): Promise<void> {
 export function resetFgaTokenCache(): void {
   fgaAccessToken = null;
   fgaTokenExpiry = 0;
+  fgaAuthorizationModelId = null;
 }

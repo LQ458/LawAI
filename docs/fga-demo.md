@@ -4,7 +4,7 @@
 
 ## Authorization model
 
-仓库中的 `fga/model.fga` 是应用和 demo tuple 所假定的模型：
+仓库中的 `fga/model.fga` 是便于阅读的 DSL；`fga/model.json` 是 API 可部署版本。应用和 demo tuple 使用同一模型：
 
 ```fga
 model
@@ -39,8 +39,9 @@ user:auth0_<base64url(Auth0 subject)>
 POST /api/rag-search JSON query
   -> server-side Auth0 identity
   -> Pinecone candidate IDs
-  -> MongoDB authoritative metadata/content
+  -> MongoDB authoritative authorization metadata only
   -> public bypass OR restricted FGA check
+  -> MongoDB bounded content for authorized IDs only
   -> authorized-only bounded context
   -> DeepSeek
   -> authorized-only answer sources
@@ -68,9 +69,19 @@ npx tsx scripts/seed-fga.ts --dry-run
 npx tsx scripts/demo-fga.ts --dry-run
 ```
 
+FGA model 状态是只读操作。`--apply` 只允许空 store 创建一次模型；非空不匹配、多个模型或写入前状态变化都会拒绝。脚本不输出 store/model ID 或 credential，也不读取或写入 tuple：
+
+```bash
+npm run fga:model:status
+npm run fga:model:apply
+```
+
 Live tuple seed 需要：
 
 ```text
+AUTH0_FGA_API_URL=https://api.<jurisdiction>.fga.dev
+AUTH0_FGA_TOKEN_ISSUER=auth.fga.dev
+AUTH0_FGA_AUDIENCE=https://api.<jurisdiction>.fga.dev/
 AUTH0_FGA_STORE_ID=<store-id>
 AUTH0_FGA_CLIENT_ID=<client-id>
 AUTH0_FGA_CLIENT_SECRET=<client-secret>
@@ -97,3 +108,5 @@ Seed 支持 batch、resume 和 checkpoint；checkpoint 不保存 subject 值。R
 - anonymous body 中伪造 `userId` 不能提升权限。
 
 这些断言只有实际运行并通过后才能描述为 passing E2E。本次维护只完成场景发现与代码核对，未提供真实 session，因此没有运行该外部 suite。
+
+2026-07-23 的 live、无个人数据检查确认：client credential token exchange 成功；store 初始为空；所需 authorization model 创建后只读状态为 `models=1 / ready`；再次 apply 为零写入 no-op；placeholder subject/object 的无 tuple check 返回 denied。没有创建 manager/employee subject mapping 或任何 relationship tuple，因此仍不能声称 manager allowed / employee denied 已通过。

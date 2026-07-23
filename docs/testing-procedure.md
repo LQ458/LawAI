@@ -22,9 +22,9 @@ Jest 的 `testMatch` 只收集 `__tests__`，显式排除 `e2e/`。
 
 | Suite                                | 命令                       | 结果                              |
 | ------------------------------------ | -------------------------- | --------------------------------- |
-| Unit/API/component                   | `npm run test:unit`        | 11 suites，47 passed              |
+| Unit/API/component                   | `npm run test:unit`        | 12 suites，53 passed              |
 | Mocked authorization/RAG integration | `npm run test:integration` | 1 suite，5 passed                 |
-| Default Jest total                   | `npm test`                 | 12 suites，52 unique tests passed |
+| Default Jest total                   | `npm test`                 | 13 suites，58 unique tests passed |
 
 重点断言：
 
@@ -32,6 +32,7 @@ Jest 的 `testMatch` 只收集 `__tests__`，显式排除 `e2e/`。
 - anonymous 只看到 explicit public records；
 - allowed subject 可读取同一 restricted fixture，denied subject 不可读取；
 - FGA 未配置、token 失败或异常时 restricted fail closed；
+- FGA token issuer/audience、唯一模型语义验证和显式 model-ID pin；
 - denied 标题、摘要和正文不进入 model context 或 sources；
 - RAG answer 只能引用获准 document IDs；
 - chat 读取、更新、删除绑定当前 owner；

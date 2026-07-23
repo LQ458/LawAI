@@ -20,6 +20,8 @@
     "test:ai": "npm run test:ai:external",
     "test:ai:external": "tsx e2e/report/index.ts",
     "test:ai-eval": "npm run test:ai:external",
+    "fga:model:status": "tsx scripts/manage-fga-model.ts --dry-run",
+    "fga:model:apply": "tsx scripts/manage-fga-model.ts --apply",
     "data:migrate:dry-run": "tsx scripts/migrate-document-metadata.ts --dry-run",
     "data:evidence": "tsx scripts/report-data-evidence.ts",
     "audit:prod": "npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org",
