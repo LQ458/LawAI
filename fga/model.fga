@@ -1,0 +1,12 @@
+model
+  schema 1.1
+
+type user
+
+type department
+  relations
+    define member: [user]
+
+type document
+  relations
+    define viewer: [user, department#member]

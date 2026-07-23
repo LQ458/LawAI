@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useCallback, useEffect, useState } from "react";
 import { useUser } from "@auth0/nextjs-auth0/client";
 import { Card } from "primereact/card";
 import { DataTable } from "primereact/datatable";
@@ -10,56 +11,79 @@ import { Chart } from "primereact/chart";
 import { Tag } from "primereact/tag";
 
 interface ActivityStats {
+  totalActions: number;
   totalQueries: number;
   activeUsers: number;
   period: string;
 }
 
-interface TopUser {
-  userId: string;
-  username: string;
-  actions: number;
-  queries: number;
-  interactions: number;
-  logins: number;
-  activityScore: number;
+interface ActionBreakdown {
+  action: string;
+  count: number;
 }
 
-interface RecentActivity {
-  userId: string;
-  username: string;
-  action: string;
-  timestamp: string;
+interface DailyActivity {
+  date: string;
+  actions: number;
+  queries: number;
+  activeUsers: number;
 }
+
+interface ActivityResponse {
+  stats: ActivityStats;
+  actionBreakdown: ActionBreakdown[];
+  dailyActivity: DailyActivity[];
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  login: "登录",
+  query: "查询",
+  chat: "对话",
+  view: "浏览",
+  like: "点赞",
+  bookmark: "收藏",
+};
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useUser();
   const [stats, setStats] = useState<ActivityStats | null>(null);
-  const [topUsers, setTopUsers] = useState<TopUser[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [actionBreakdown, setActionBreakdown] = useState<ActionBreakdown[]>([]);
+  const [dailyActivity, setDailyActivity] = useState<DailyActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
-    fetchStats(7);
-  }, [user]);
-
-  const fetchStats = async (days: number) => {
+  const fetchStats = useCallback(async (days: number) => {
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch(`/api/admin/activity?days=${days}`);
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data.stats);
-        setTopUsers(data.topUsers);
-        setRecentActivity(data.recentActivity);
+      const response = await fetch(`/api/admin/activity?days=${days}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        setError(
+          response.status === 403
+            ? "当前账号没有管理员权限"
+            : "无法加载活动统计",
+        );
+        return;
       }
-    } catch (error) {
-      console.error("Error fetching stats:", error);
+
+      const data = (await response.json()) as ActivityResponse;
+      setStats(data.stats);
+      setActionBreakdown(data.actionBreakdown);
+      setDailyActivity(data.dailyActivity);
+    } catch {
+      setError("无法加载活动统计");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      void fetchStats(7);
+    }
+  }, [fetchStats, user]);
 
   if (authLoading) {
     return (
@@ -79,38 +103,36 @@ export default function AdminDashboard() {
   }
 
   const chartData = {
-    labels: topUsers.slice(0, 10).map((u) => u.username || u.userId.slice(0, 8)),
+    labels: dailyActivity.map((row) => row.date),
     datasets: [
       {
-        label: "活跃度分数",
-        data: topUsers.slice(0, 10).map((u) => u.activityScore),
+        label: "全部活动",
+        data: dailyActivity.map((row) => row.actions),
         backgroundColor: "#6366f1",
         borderColor: "#4f46e5",
+      },
+      {
+        label: "查询与对话",
+        data: dailyActivity.map((row) => row.queries),
+        backgroundColor: "#22c55e",
+        borderColor: "#16a34a",
       },
     ],
   };
 
   const chartOptions = {
+    responsive: true,
     plugins: {
-      legend: { display: false },
+      legend: { position: "bottom" as const },
     },
     scales: {
-      y: { beginAtZero: true },
+      y: { beginAtZero: true, ticks: { precision: 0 } },
     },
   };
 
-  const actionTag = (action: string) => {
-    const map: Record<string, { severity: "success" | "info" | "warning" | "danger"; label: string }> = {
-      login: { severity: "success", label: "登录" },
-      query: { severity: "info", label: "查询" },
-      chat: { severity: "info", label: "对话" },
-      view: { severity: "warning", label: "浏览" },
-      like: { severity: "danger", label: "点赞" },
-      bookmark: { severity: "danger", label: "收藏" },
-    };
-    const cfg = map[action] || { severity: "info" as const, label: action };
-    return <Tag severity={cfg.severity} value={cfg.label} />;
-  };
+  const actionTag = (action: string) => (
+    <Tag severity="info" value={ACTION_LABELS[action] || action} />
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -124,11 +146,7 @@ export default function AdminDashboard() {
               severity="secondary"
               onClick={() => (window.location.href = "/")}
             />
-            <Button
-              label="7天"
-              severity="info"
-              onClick={() => fetchStats(7)}
-            />
+            <Button label="7天" severity="info" onClick={() => fetchStats(7)} />
             <Button
               label="30天"
               severity="info"
@@ -141,72 +159,55 @@ export default function AdminDashboard() {
           <div className="flex justify-center py-12">
             <ProgressSpinner />
           </div>
+        ) : error ? (
+          <Card>
+            <p className="text-red-600">{error}</p>
+          </Card>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <Card title="总查询次数">
+              <Card title="总活动次数">
                 <p className="text-3xl font-bold text-indigo-600">
+                  {stats?.totalActions || 0}
+                </p>
+                <p className="text-sm text-gray-500">过去 {stats?.period}</p>
+              </Card>
+              <Card title="查询与对话">
+                <p className="text-3xl font-bold text-orange-600">
                   {stats?.totalQueries || 0}
                 </p>
-                <p className="text-sm text-gray-500">
-                  过去 {stats?.period}
-                </p>
+                <p className="text-sm text-gray-500">过去 {stats?.period}</p>
               </Card>
               <Card title="活跃用户">
                 <p className="text-3xl font-bold text-green-600">
                   {stats?.activeUsers || 0}
                 </p>
-                <p className="text-sm text-gray-500">
-                  过去 {stats?.period}
-                </p>
-              </Card>
-              <Card title="Top 用户">
-                <p className="text-3xl font-bold text-orange-600">
-                  {topUsers[0]?.username || topUsers[0]?.userId?.slice(0, 8) || "N/A"}
-                </p>
-                <p className="text-sm text-gray-500">
-                  活跃度: {topUsers[0]?.activityScore || 0}
-                </p>
+                <p className="text-sm text-gray-500">窗口内不同登录账号数</p>
               </Card>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <Card title="用户活跃度排名 (Top 10)">
+              <Card title="每日活动趋势">
                 <Chart type="bar" data={chartData} options={chartOptions} />
               </Card>
-              <Card title="用户活跃度详情">
-                <DataTable value={topUsers} size="small" paginator rows={5}>
-                  <Column header="排名" body={(_, { rowIndex }) => rowIndex + 1} />
+              <Card title="活动类型汇总">
+                <DataTable value={actionBreakdown} size="small">
                   <Column
-                    field="username"
-                    header="用户"
-                    body={(row) => row.username || row.userId.slice(0, 8) + "..."}
+                    field="action"
+                    header="活动"
+                    body={(row: ActionBreakdown) => actionTag(row.action)}
                   />
-                  <Column field="activityScore" header="活跃度" sortable />
-                  <Column field="queries" header="查询" />
-                  <Column field="interactions" header="交互" />
-                  <Column field="logins" header="登录" />
+                  <Column field="count" header="次数" sortable />
                 </DataTable>
               </Card>
             </div>
 
-            <Card title="最近活动">
-              <DataTable value={recentActivity} size="small" paginator rows={10}>
-                <Column
-                  field="username"
-                  header="用户"
-                  body={(row) => row.username || row.userId.slice(0, 8) + "..."}
-                />
-                <Column
-                  field="action"
-                  header="操作"
-                  body={(row) => actionTag(row.action)}
-                />
-                <Column
-                  field="timestamp"
-                  header="时间"
-                  body={(row) => new Date(row.timestamp).toLocaleString("zh-CN")}
-                />
+            <Card title="每日聚合">
+              <DataTable value={dailyActivity} size="small" paginator rows={10}>
+                <Column field="date" header="日期（UTC）" />
+                <Column field="actions" header="全部活动" />
+                <Column field="queries" header="查询与对话" />
+                <Column field="activeUsers" header="活跃用户" />
               </DataTable>
             </Card>
           </>

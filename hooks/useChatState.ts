@@ -39,12 +39,12 @@ export const useChatState = ({ userId }: UseChatStateProps) => {
   }, [userId, updateChatInfo]);
 
   const deleteChat = useCallback(
-    async (chatId: string, userIdParam: string) => {
+    async (chatId: string) => {
       try {
         const response = await fetch("/api/deleteChat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatId, userId: userIdParam }),
+          body: JSON.stringify({ chatId }),
         });
 
         if (response.ok) {
