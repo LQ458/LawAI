@@ -1,6 +1,20 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+export type RecordVisibility = "public" | "restricted";
+export type RecordSourceKind = "source-derived" | "synthetic";
+
 export interface IRecord extends Document {
+  documentId: string;
+  visibility: RecordVisibility;
+  department?: string;
+  sensitivity?: string;
+  fgaObjectId?: string;
+  source: string;
+  sourceKind: RecordSourceKind;
+  sourceUrl: string;
+  version: string;
+  needsReview: boolean;
+  syntheticMetric: boolean;
   title: string;
   link: string;
   description: string;
@@ -21,6 +35,79 @@ export interface IRecord extends Document {
 
 const recordSchema = new Schema<IRecord>(
   {
+    documentId: {
+      type: String,
+      required: true,
+      trim: true,
+      unique: true,
+      immutable: true,
+      default: function (this: IRecord) {
+        return this._id ? `record:${this._id.toString()}` : undefined;
+      },
+    },
+    visibility: {
+      type: String,
+      enum: ["public", "restricted"],
+      required: true,
+      default: "restricted",
+      index: true,
+    },
+    department: {
+      type: String,
+      trim: true,
+      required: function (this: IRecord) {
+        return this.visibility === "restricted";
+      },
+    },
+    sensitivity: {
+      type: String,
+      trim: true,
+      required: function (this: IRecord) {
+        return this.visibility === "restricted";
+      },
+    },
+    fgaObjectId: {
+      type: String,
+      trim: true,
+      required: function (this: IRecord) {
+        return this.visibility === "restricted";
+      },
+      validate: {
+        validator: (value?: string) =>
+          value === undefined || !value.startsWith("document:"),
+        message: "fgaObjectId must be the raw stable ID without document:",
+      },
+    },
+    source: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    sourceKind: {
+      type: String,
+      enum: ["source-derived", "synthetic"],
+      required: true,
+      index: true,
+    },
+    sourceUrl: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    version: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    needsReview: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    syntheticMetric: {
+      type: Boolean,
+      default: false,
+    },
     title: {
       type: String,
       required: true,
@@ -58,7 +145,6 @@ const recordSchema = new Schema<IRecord>(
     tags: [
       {
         type: String,
-        index: true,
       },
     ],
     category: {
@@ -92,6 +178,7 @@ const recordSchema = new Schema<IRecord>(
 
 // 使用 schema.index() 定义复合索引，避免重复
 recordSchema.index({ category: 1 });
+recordSchema.index({ visibility: 1, sourceKind: 1 });
 
 // 添加索引以优化查询性能
 recordSchema.index({ title: "text", description: "text", content: "text" });

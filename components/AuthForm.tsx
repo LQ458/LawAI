@@ -8,10 +8,7 @@ interface AuthFormProps {
   setInitChat: (initChat: boolean) => void;
 }
 
-const AuthForm: React.FC<AuthFormProps> = ({
-  onSuccess,
-  setInitChat,
-}) => {
+const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, setInitChat }) => {
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
@@ -38,7 +35,10 @@ const AuthForm: React.FC<AuthFormProps> = ({
           法律AI
         </h2>
         <p className="text-center text-gray-500 mb-4">
-          你的私人法律顾问
+          一般法律信息与授权检索原型
+        </p>
+        <p className="text-center text-xs text-gray-500 mb-4">
+          不构成正式法律意见；高风险事项请咨询合格律师或官方法律援助机构。
         </p>
 
         <div className="flex flex-col gap-4">

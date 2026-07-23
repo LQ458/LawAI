@@ -1,46 +1,96 @@
 import { test, expect } from "@playwright/test";
 
 const BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
+const MANAGER_COOKIE = process.env.E2E_MANAGER_AUTH_COOKIE || "";
+const EMPLOYEE_COOKIE = process.env.E2E_EMPLOYEE_AUTH_COOKIE || "";
+const RESTRICTED_QUERY = process.env.E2E_RESTRICTED_QUERY || "";
+const RESTRICTED_DOCUMENT_ID = process.env.E2E_RESTRICTED_DOCUMENT_ID || "";
+const RESTRICTED_DOCUMENT_TITLE =
+  process.env.E2E_RESTRICTED_DOCUMENT_TITLE || "";
+const PUBLIC_QUERY = process.env.E2E_PUBLIC_QUERY || "";
 
 interface RagResponse {
-  cases: Array<{ title: string; link: string }>;
-  data: string;
-  accessDenied?: boolean;
+  mode: "grounded_rag";
+  grounded: boolean;
+  answer: string;
+  sources: Array<{ id: string; title: string; source: string }>;
 }
 
 async function searchRag(
   query: string,
-  userId: string,
-): Promise<RagResponse> {
-  const res = await fetch(
-    `${BASE_URL}/api/rag-search?search=${encodeURIComponent(query)}&userId=${userId}`,
-  );
-  return res.json();
+  cookie?: string,
+  extraBody: Record<string, unknown> = {},
+): Promise<{ status: number; body: RagResponse }> {
+  const response = await fetch(`${BASE_URL}/api/rag-search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    body: JSON.stringify({ query, ...extraBody }),
+  });
+  return { status: response.status, body: await response.json() };
 }
 
-test.describe("FGA 文档权限控制测试", () => {
-  test("4.1 RAG 搜索返回相关案例", async () => {
-    const result = await searchRag("工伤赔偿", "alice");
-    console.log(`alice - accessDenied: ${result.accessDenied}, cases: ${result.cases?.length || 0}`);
-    expect(result.cases?.length || 0).toBeGreaterThan(0);
+function requireRestrictedFixture() {
+  test.skip(
+    !MANAGER_COOKIE ||
+      !EMPLOYEE_COOKIE ||
+      !RESTRICTED_QUERY ||
+      !RESTRICTED_DOCUMENT_ID,
+    "Optional FGA E2E requires manager/employee sessions and a restricted fixture",
+  );
+}
+
+test.describe("FGA 文档权限控制测试（可选真实服务）", () => {
+  test("4.1 manager 可读取获准 restricted document", async () => {
+    requireRestrictedFixture();
+    const result = await searchRag(RESTRICTED_QUERY, MANAGER_COOKIE);
+
+    expect(result.status).toBe(200);
+    expect(result.body.sources.map((source) => source.id)).toContain(
+      RESTRICTED_DOCUMENT_ID,
+    );
   });
 
-  test("4.2 公开文档对所有用户可见", async () => {
-    const result = await searchRag("工伤赔偿", "bob");
-    console.log(`bob - accessDenied: ${result.accessDenied}, cases: ${result.cases?.length || 0}`);
-    // All current docs are public (no sensitivity metadata) - any user can view
-    expect(result.accessDenied).toBe(false);
+  test("4.2 employee 对同一 restricted document 被拒绝", async () => {
+    requireRestrictedFixture();
+    const result = await searchRag(RESTRICTED_QUERY, EMPLOYEE_COOKIE);
+
+    expect(result.status).toBe(200);
+    expect(result.body.sources.map((source) => source.id)).not.toContain(
+      RESTRICTED_DOCUMENT_ID,
+    );
+    if (RESTRICTED_DOCUMENT_TITLE) {
+      expect(JSON.stringify(result.body)).not.toContain(
+        RESTRICTED_DOCUMENT_TITLE,
+      );
+    }
   });
 
-  test("4.3 不同用户搜索相同关键词返回一致结果", async () => {
-    const result = await searchRag("劳动合同", "charlie");
-    console.log(`charlie - accessDenied: ${result.accessDenied}, cases: ${result.cases?.length || 0}`);
-    expect(result.cases?.length || 0).toBeGreaterThan(0);
+  test("4.3 anonymous 只能收到 explicit public sources", async () => {
+    test.skip(!PUBLIC_QUERY, "Optional FGA E2E requires E2E_PUBLIC_QUERY");
+    const result = await searchRag(PUBLIC_QUERY);
+
+    expect(result.status).toBe(200);
+    expect(result.body.grounded).toBe(true);
+    expect(result.body.sources.map((source) => source.id)).not.toContain(
+      RESTRICTED_DOCUMENT_ID,
+    );
   });
 
-  test("4.4 匿名用户也可访问公开文档", async () => {
-    const result = await searchRag("工资拖欠", "anonymous");
-    console.log(`anonymous - accessDenied: ${result.accessDenied}, cases: ${result.cases?.length || 0}`);
-    expect(result.accessDenied).toBe(false);
+  test("4.4 伪造 body userId 不能提升 anonymous 权限", async () => {
+    test.skip(
+      !RESTRICTED_QUERY || !RESTRICTED_DOCUMENT_ID,
+      "Optional FGA E2E requires a restricted fixture",
+    );
+    const result = await searchRag(RESTRICTED_QUERY, undefined, {
+      userId: "forged-manager",
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.body.sources.map((source) => source.id)).not.toContain(
+      RESTRICTED_DOCUMENT_ID,
+    );
   });
 });

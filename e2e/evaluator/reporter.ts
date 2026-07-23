@@ -2,119 +2,119 @@ import { ScoredResult } from "./judge";
 import * as fs from "fs";
 import * as path from "path";
 
-export function generateMarkdownReport(results: ScoredResult[]): string {
-  const totalScore =
-    results.reduce((sum, r) => sum + r.evaluation.total, 0) / results.length;
-  const passCount = results.filter((r) => r.evaluation.verdict === "PASS").length;
-  const failCount = results.filter((r) => r.evaluation.verdict === "FAIL").length;
-
-  const avgSafety =
-    results.reduce((sum, r) => sum + r.evaluation.safety.score, 0) /
-    results.length;
-  const avgSpecificity =
-    results.reduce((sum, r) => sum + r.evaluation.specificity.score, 0) /
-    results.length;
-  const avgActionability =
-    results.reduce((sum, r) => sum + r.evaluation.actionability.score, 0) /
-    results.length;
-  const avgClarity =
-    results.reduce((sum, r) => sum + r.evaluation.clarity.score, 0) /
-    results.length;
-
-  const overallVerdict = totalScore >= 70 ? "PASS" : "FAIL";
-
-  const safetyIssues = results
-    .filter((r) => r.evaluation.safety.issues.length > 0)
-    .map((r) => ({
-      id: r.testId,
-      query: r.query.slice(0, 50),
-      issues: r.evaluation.safety.issues,
-    }));
-
-  const rows = results
-    .map((r) => {
-      const icon = r.evaluation.verdict === "PASS" ? "✅" : "❌";
-      return `| ${icon} ${r.testId} | ${r.query.slice(0, 30)}... | ${r.evaluation.total} | ${r.evaluation.safety.score}/40 | ${r.evaluation.specificity.score}/25 | ${r.evaluation.actionability.score}/20 | ${r.evaluation.clarity.score}/15 | ${r.evaluation.summary.slice(0, 60)} |`;
-    })
-    .join("\n");
-
-  return `# LawAI E2E 测试报告
-
-> 生成时间: ${new Date().toLocaleString("zh-CN")}
-> 测试用例: ${results.length} 个
-> AI 模型: DeepSeek Chat (评估代理)
-
----
-
-## 总览: ${overallVerdict} (${Math.round(totalScore)}/100)
-
-| 指标 | 数值 |
-|------|------|
-| 通过 | ${passCount} |
-| 失败 | ${failCount} |
-| 平均分 | ${Math.round(totalScore)} |
-| 平均安全性 | ${Math.round(avgSafety)}/40 |
-| 平均针对性 | ${Math.round(avgSpecificity)}/25 |
-| 平均可操作性 | ${Math.round(avgActionability)}/20 |
-| 平均清晰度 | ${Math.round(avgClarity)}/15 |
-
----
-
-## 安全问题
-
-${
-  safetyIssues.length === 0
-    ? "✅ 无安全问题"
-    : safetyIssues
-        .map(
-          (s) =>
-            `- **Q${s.id}** (${s.query}): ${s.issues.join("; ")}`,
-        )
-        .join("\n")
+export interface EvaluationReportMetadata {
+  runAt: string;
+  answerModel: string;
+  judgeModel: string;
+  promptVersion: string;
+  rubricVersion: string;
+  datasetVersion: string;
 }
 
----
+function averages(results: ScoredResult[]) {
+  const divisor = results.length || 1;
+  return {
+    total:
+      results.reduce((sum, result) => sum + result.evaluation.total, 0) /
+      divisor,
+    safety:
+      results.reduce((sum, result) => sum + result.evaluation.safety.score, 0) /
+      divisor,
+    specificity:
+      results.reduce(
+        (sum, result) => sum + result.evaluation.specificity.score,
+        0,
+      ) / divisor,
+    actionability:
+      results.reduce(
+        (sum, result) => sum + result.evaluation.actionability.score,
+        0,
+      ) / divisor,
+    clarity:
+      results.reduce(
+        (sum, result) => sum + result.evaluation.clarity.score,
+        0,
+      ) / divisor,
+  };
+}
 
-## 逐题结果
+export function generateMarkdownReport(
+  results: ScoredResult[],
+  metadata: EvaluationReportMetadata,
+): string {
+  const average = averages(results);
+  const passCount = results.filter(
+    (result) => result.evaluation.verdict === "PASS",
+  ).length;
+  const rows = results
+    .map(
+      (result) =>
+        `| ${result.testId} | ${result.category} | ${result.evaluation.total} | ${result.evaluation.safety.score}/40 | ${result.evaluation.specificity.score}/25 | ${result.evaluation.actionability.score}/20 | ${result.evaluation.clarity.score}/15 | ${result.evaluation.verdict} |`,
+    )
+    .join("\n");
 
-| # | 问题 | 总分 | 安全 | 针对 | 操作 | 清晰 | 评价 |
-|---|------|------|------|------|------|------|------|
+  return `# LawAI automated evaluation report
+
+> This is an automated LLM-judge evaluation of 12 curated legal-information
+> test queries. It is not a lawyer review or a professional legal-accuracy
+> validation. Raw prompts and responses are intentionally omitted.
+
+| Run metadata | Value |
+|---|---|
+| Date (UTC) | ${metadata.runAt} |
+| Answer model | ${metadata.answerModel} |
+| Judge model | ${metadata.judgeModel} |
+| Prompt version | ${metadata.promptVersion} |
+| Rubric version | ${metadata.rubricVersion} |
+| Dataset version | ${metadata.datasetVersion} |
+
+## Summary
+
+| Metric | Result |
+|---|---:|
+| Curated queries evaluated | ${results.length} |
+| Passing items | ${passCount} |
+| Average total | ${Math.round(average.total)}/100 |
+| Average safety | ${Math.round(average.safety)}/40 |
+| Average specificity | ${Math.round(average.specificity)}/25 |
+| Average actionability | ${Math.round(average.actionability)}/20 |
+| Average clarity | ${Math.round(average.clarity)}/15 |
+
+## Per-item results
+
+| ID | Category | Total | Safety | Specificity | Actionability | Clarity | Automated verdict |
+|---:|---|---:|---:|---:|---:|---:|---|
 ${rows}
-
----
-
-## 详细回复
-
-${results
-  .map(
-    (r) => `
-### Q${r.testId}: ${r.query}
-
-**AI 回复**:
-${r.response.slice(0, 500)}${r.response.length > 500 ? "..." : ""}
-
-**评估**: ${r.evaluation.summary}
-**得分**: ${r.evaluation.total}/100 (${r.evaluation.verdict})
-`,
-  )
-  .join("\n---\n")}
 `;
 }
 
-export function saveReport(results: ScoredResult[], outputDir: string): void {
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
+function sanitizedResults(results: ScoredResult[]) {
+  return results.map((result) => ({
+    testId: result.testId,
+    category: result.category,
+    timestamp: result.timestamp,
+    evaluation: result.evaluation,
+  }));
+}
 
-  const report = generateMarkdownReport(results);
+export function saveReport(
+  results: ScoredResult[],
+  outputDir: string,
+  metadata: EvaluationReportMetadata,
+): void {
+  fs.mkdirSync(outputDir, { recursive: true });
 
-  const dateStr = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const report = generateMarkdownReport(results, metadata);
+  const dateStr = metadata.runAt.replace(/[:.]/g, "-").slice(0, 19);
   const mdPath = path.join(outputDir, `report-${dateStr}.md`);
   fs.writeFileSync(mdPath, report, "utf-8");
 
   const jsonPath = path.join(outputDir, "results.json");
-  fs.writeFileSync(jsonPath, JSON.stringify(results, null, 2), "utf-8");
+  fs.writeFileSync(
+    jsonPath,
+    JSON.stringify({ metadata, results: sanitizedResults(results) }, null, 2),
+    "utf-8",
+  );
 
-  console.log(`\nReport saved to: ${mdPath}`);
-  console.log(`JSON results saved to: ${jsonPath}`);
+  console.log(`Report saved under ${outputDir}`);
 }

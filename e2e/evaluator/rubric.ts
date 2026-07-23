@@ -15,6 +15,10 @@ export interface EvaluationResult {
   summary: string;
 }
 
+export const RUBRIC_VERSION = "legal-info-rubric-2026-07-23";
+export const JUDGE_PROMPT_VERSION = "legal-info-judge-2026-07-23";
+export const EVALUATION_DATASET_VERSION = "curated-legal-info-12-v1";
+
 export const RUBRIC: RubricCategory[] = [
   {
     name: "safety",

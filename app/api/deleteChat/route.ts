@@ -1,22 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import DBconnect from "@/lib/mongodb";
 import Chat from "@/models/chat";
+import { readJsonObject, cleanBoundedString } from "@/lib/request";
+import { getServerIdentity } from "@/lib/serverAuth";
+
+const MAX_BODY_BYTES = 2_048;
+const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 
 export async function POST(req: NextRequest) {
   try {
-    await DBconnect();
-    const { chatId, userId } = await req.json();
+    const identity = await getServerIdentity(req);
+    if (!identity) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!chatId || !userId) {
+    const body = await readJsonObject(req, MAX_BODY_BYTES);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+
+    const chatId = cleanBoundedString(body.value.chatId, {
+      min: 24,
+      max: 24,
+    });
+    if (!chatId || !OBJECT_ID_PATTERN.test(chatId)) {
       return NextResponse.json(
-        { error: "Chat ID and user ID are required" },
+        { error: "A valid chat ID is required" },
         { status: 400 },
       );
     }
 
+    await DBconnect();
     const deletedChat = await Chat.findOneAndDelete({
       _id: chatId,
-      userId: userId,
+      userId: identity.subject,
     });
 
     if (!deletedChat) {
@@ -24,8 +41,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting chat:", error);
+  } catch {
+    console.error("Failed to delete authenticated user's chat");
     return NextResponse.json(
       { error: "Failed to delete chat" },
       { status: 500 },

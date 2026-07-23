@@ -1,168 +1,299 @@
 import { NextResponse, NextRequest } from "next/server";
+import OpenAI from "openai";
 import Chat from "@/models/chat";
 import DBconnect from "@/lib/mongodb";
 import { getCurrentTimeInLocalTimeZone } from "@/components/tools";
-import OpenAI from "openai";
+import { readJsonObject, cleanBoundedString } from "@/lib/request";
+import { getServerIdentity } from "@/lib/serverAuth";
+import { consumeRateLimit } from "@/lib/rateLimit";
+
+const MAX_BODY_BYTES = 20_000;
+const MAX_MESSAGE_LENGTH = 4_000;
+const MAX_CONTEXT_MESSAGES = 20;
+const MAX_CONTEXT_CHARACTERS = 40_000;
+const MAX_AI_RESPONSE_LENGTH = 20_000;
+const DEEPSEEK_TIMEOUT_MS = 45_000;
+const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
+
+const SYSTEM_PROMPT = [
+  "你是面向普通用户的法律信息助手，只提供一般性法律信息。",
+  "本普通聊天没有连接检索系统或权威法律资料库，回答并非基于检索核验；不得声称已经查阅、核实或引用了具体法条、判例或官方资料。",
+  "你的回答不构成法律意见、律师服务或律师与客户关系，也不能替代持证律师结合完整事实提供的建议。",
+  "每次回答都应简短明示上述一般法律信息限制。",
+  "法律和程序可能变化。请明确提醒用户核对当地最新官方资料，并在涉及期限、重大财产、人身安全或诉讼时咨询合资格的律师或相关机构。",
+  "信息不足时先提出必要的澄清问题；不要虚构联系方式、地点、法条或事实。",
+].join("");
+
+type AiMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+
+function isTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "APIConnectionTimeoutError" ||
+      error.name === "AbortError" ||
+      error.message.toLowerCase().includes("timeout"))
+  );
+}
+
+function chatTitle(message: string): string {
+  return message.length > 20 ? `${message.slice(0, 20)}...` : message;
+}
+
+function boundedContext(
+  storedMessages: Array<{ role: string; content: string }>,
+  currentMessage: string,
+): AiMessage[] {
+  const selected: AiMessage[] = [];
+  let characters = currentMessage.length;
+
+  for (let index = storedMessages.length - 1; index >= 0; index -= 1) {
+    const item = storedMessages[index];
+    if (
+      item.role === "system" ||
+      !["user", "assistant"].includes(item.role) ||
+      typeof item.content !== "string"
+    ) {
+      continue;
+    }
+    if (
+      selected.length >= MAX_CONTEXT_MESSAGES ||
+      characters + item.content.length > MAX_CONTEXT_CHARACTERS
+    ) {
+      break;
+    }
+    selected.unshift({
+      role: item.role as "user" | "assistant",
+      content: item.content,
+    });
+    characters += item.content.length;
+  }
+
+  return [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...selected,
+    { role: "user", content: currentMessage },
+  ];
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, chatId, message } = await req.json();
-    let sessionId = chatId;
-    let chat;
-    let newChatCreated = false;
-
-    await DBconnect();
-
-    if (!userId || !message) {
+    const identity = await getServerIdentity(req);
+    if (!identity) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await consumeRateLimit("chat", req, identity.subject))) {
       return NextResponse.json(
-        { error: "User ID and message are required" },
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": "60" } },
+      );
+    }
+
+    const body = await readJsonObject(req, MAX_BODY_BYTES);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+
+    const message = cleanBoundedString(body.value.message, {
+      max: MAX_MESSAGE_LENGTH,
+    });
+    if (!message) {
+      return NextResponse.json(
+        {
+          error: `Message must be between 1 and ${MAX_MESSAGE_LENGTH} characters`,
+        },
         { status: 400 },
       );
     }
 
-    if (!chatId) {
-      try {
-        const existingChat = await Chat.findOne({
-          userId: userId,
-          title: message.substring(0, 20) + (message.length > 20 ? "..." : ""),
-          "messages.length": 2,
-        });
-
-        if (existingChat) {
-          chat = existingChat;
-          sessionId = existingChat._id.toString();
-        } else {
-          chat = new Chat({
-            title:
-              message.substring(0, 20) + (message.length > 20 ? "..." : ""),
-            userId: userId,
-            time: getCurrentTimeInLocalTimeZone(),
-            messages: [
-              {
-                role: "system",
-                content:
-                  "您正在为一位农民工提供法律帮助。在回答任何问题之前,请确保首先请求用户提供所有必要的具体信息,以便提供精准、个性化的法律建议。例如,如果用户遇到工伤问题,请询问以下详细信息:工伤发生的时间、地点、受伤部位、医疗费用以及雇主信息等。如果是工资争议,请询问工资支付的具体情况、合同是否存在以及任何相关证据。请避免给出一般性或模糊的建议,确保提供与用户情况完全相关的指导。请在开始提供答案时,结合用户提供的具体信息,给出详细的操作步骤,并尽可能提供实际的联系方式和地点等信息。确保每次提供的答案都是用户可以立刻行动并且符合他们法律需求的。",
-              },
-              { role: "user", content: message, timestamp: new Date() },
-            ],
-          });
-          await chat.save();
-          sessionId = chat._id.toString();
-          newChatCreated = true;
-        }
-      } catch (error) {
-        console.error("Error creating new chat:", error);
-        throw error;
-      }
-    } else {
-      chat = await Chat.findById(sessionId);
-      if (!chat) {
-        return NextResponse.json({ error: "Chat not found" }, { status: 404 });
-      }
-      chat.messages.push({
-        role: "user",
-        content: message,
-        timestamp: new Date(),
+    let chatId: string | null = null;
+    if (body.value.chatId !== undefined && body.value.chatId !== "") {
+      chatId = cleanBoundedString(body.value.chatId, {
+        min: 24,
+        max: 24,
       });
-      await chat.save();
+      if (!chatId || !OBJECT_ID_PATTERN.test(chatId)) {
+        return NextResponse.json(
+          { error: "A valid chat ID is required" },
+          { status: 400 },
+        );
+      }
     }
 
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "AI service is unavailable" },
+        { status: 503 },
+      );
+    }
+
+    await DBconnect();
+
+    const isNewChat = !chatId;
+    const chat = chatId
+      ? await Chat.findOne({ _id: chatId, userId: identity.subject })
+      : new Chat({
+          title: chatTitle(message),
+          userId: identity.subject,
+          time: getCurrentTimeInLocalTimeZone(),
+          messages: [{ role: "system", content: SYSTEM_PROMPT }],
+        });
+
+    if (!chat) {
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+    }
+
+    const sessionId = chat._id.toString();
+    const messages = boundedContext(
+      chat.messages as Array<{ role: string; content: string }>,
+      message,
+    );
     const deepseek = new OpenAI({
       baseURL: "https://api.deepseek.com",
-      apiKey: process.env.DEEPSEEK_API_KEY!,
+      apiKey,
+      timeout: DEEPSEEK_TIMEOUT_MS,
+      maxRetries: 0,
     });
+    const upstreamAbort = new AbortController();
+    let didTimeOut = false;
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      didTimeOut = true;
+      upstreamAbort.abort();
+    }, DEEPSEEK_TIMEOUT_MS);
 
-    const stream = new ReadableStream({
+    const createUpstreamStream = () =>
+      deepseek.chat.completions.create(
+        {
+          model: process.env.AI_MODEL || "deepseek-chat",
+          messages,
+          stream: true,
+          max_tokens: 1_500,
+        },
+        { signal: upstreamAbort.signal },
+      );
+
+    let completionStream: Awaited<ReturnType<typeof createUpstreamStream>>;
+    try {
+      completionStream = await createUpstreamStream();
+    } catch (error) {
+      clearTimeout(timeout);
+      const timedOut = didTimeOut || isTimeoutError(error);
+      console.error(
+        timedOut
+          ? "DeepSeek chat request timed out"
+          : "DeepSeek chat request failed",
+      );
+      return NextResponse.json(
+        {
+          error: timedOut
+            ? "AI service timed out"
+            : "AI service is unavailable",
+        },
+        { status: timedOut ? 504 : 502 },
+      );
+    }
+
+    const encoder = new TextEncoder();
+    const responseStream = new ReadableStream({
       async start(controller) {
+        let aiResponse = "";
         try {
-          const messages = chat.messages.map(
-            (m: { role: string; content: string }) => ({
-              role: m.role as "system" | "user" | "assistant",
-              content: m.content,
-            }),
-          );
-
-          const stream = await deepseek.chat.completions.create({
-            model: process.env.AI_MODEL || "deepseek-chat",
-            messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-            stream: true,
-          });
-
-          let aiResponse = "";
-
-          for await (const chunk of stream) {
+          for await (const chunk of completionStream) {
             const content = chunk.choices?.[0]?.delta?.content;
-            if (content) {
-              aiResponse += content;
-              controller.enqueue(
-                new TextEncoder().encode(
-                  `data: ${JSON.stringify({ content: aiResponse })}\n\n`,
-                ),
-              );
+            if (!content) {
+              continue;
             }
+            if (aiResponse.length + content.length > MAX_AI_RESPONSE_LENGTH) {
+              upstreamAbort.abort();
+              throw new Error("AI response exceeded the storage limit");
+            }
+
+            aiResponse += content;
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ content: aiResponse })}\n\n`,
+              ),
+            );
           }
 
-          if (aiResponse) {
-            chat.messages.push({
-              role: "assistant",
-              content: aiResponse,
-              timestamp: new Date(),
-            });
-            chat.time = getCurrentTimeInLocalTimeZone();
+          if (!aiResponse.trim()) {
+            throw new Error("AI service returned no content");
+          }
+
+          const now = getCurrentTimeInLocalTimeZone();
+          const userMessage = {
+            role: "user" as const,
+            content: message,
+            timestamp: new Date(),
+          };
+          const assistantMessage = {
+            role: "assistant" as const,
+            content: aiResponse,
+            timestamp: new Date(),
+          };
+
+          if (isNewChat) {
+            chat.messages.push(userMessage, assistantMessage);
+            chat.time = now;
             await chat.save();
+          } else {
+            const update = await Chat.updateOne(
+              { _id: sessionId, userId: identity.subject },
+              {
+                $push: {
+                  messages: { $each: [userMessage, assistantMessage] },
+                },
+                $set: { time: now },
+              },
+            );
+            if (update.matchedCount !== 1) {
+              throw new Error("Chat disappeared before it could be updated");
+            }
           }
 
           controller.close();
-
-          // AI title generation for new chats
-          if (newChatCreated && aiResponse) {
-            try {
-              const titleResp = await deepseek.chat.completions.create({
-                model: process.env.AI_MODEL || "deepseek-chat",
-                messages: [
-                  { role: "user", content: `用不超过10个字总结这段话的主题："${message}"` },
-                ],
-                temperature: 0,
-              });
-              const generatedTitle = titleResp.choices?.[0]?.message?.content?.trim() || "";
-              if (generatedTitle.length >= 2 && generatedTitle.length < 20) {
-                chat.title = generatedTitle;
-                chat.markModified("title");
-                await chat.save();
-              }
-            } catch {
-              // keep default
-            }
-          }
         } catch (error) {
-          console.error("Stream processing error:", error);
-          if (newChatCreated) {
-            try {
-              await Chat.findByIdAndDelete(chat._id);
-            } catch (deleteError) {
-              console.error("Error deleting chat:", deleteError);
-            }
-          } else if (chat && chat.messages.length > 1) {
-            chat.messages.pop();
-            chat.time = getCurrentTimeInLocalTimeZone();
-            await chat.save();
+          if (cancelled) {
+            return;
           }
-          controller.error(error);
+          const timedOut = didTimeOut || isTimeoutError(error);
+          console.error(
+            timedOut
+              ? "DeepSeek chat stream timed out"
+              : "Chat stream processing failed",
+          );
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                error: timedOut
+                  ? "AI service timed out"
+                  : "AI service is unavailable",
+              })}\n\n`,
+            ),
+          );
+          controller.close();
+        } finally {
+          clearTimeout(timeout);
         }
       },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Session-Id": sessionId,
-        "X-Chat-Title": encodeURIComponent(chat.title),
+      cancel() {
+        cancelled = true;
+        clearTimeout(timeout);
+        upstreamAbort.abort();
       },
     });
-  } catch (error) {
-    console.error("Error in fetchAi:", error);
+
+    return new Response(responseStream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-store",
+        Connection: "keep-alive",
+        "X-Session-Id": sessionId,
+      },
+    });
+  } catch {
+    console.error("Authenticated chat request failed");
     return NextResponse.json(
       { error: "Failed to process request" },
       { status: 500 },

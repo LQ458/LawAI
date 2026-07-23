@@ -203,6 +203,7 @@ export default function RecommendPage() {
       // 更新用户画像
       await fetch("/api/user-action", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "like",
           recordId,
@@ -269,6 +270,7 @@ export default function RecommendPage() {
       // 更新用户画像
       await fetch("/api/user-action", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "bookmark",
           recordId,

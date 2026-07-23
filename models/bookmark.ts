@@ -5,7 +5,7 @@ import mongoose, { Schema } from "mongoose";
  * @interface IBookmark
  * @extends {Document}
  *
- * @property {string} userId - 用户邮箱，作为唯一标识
+ * @property {string} userId - 服务端 Auth0 subject
  * @property {mongoose.Types.ObjectId} recordId - 案例记录ID
  * @property {Date} createdAt - 收藏时间
  */
@@ -18,7 +18,7 @@ export interface IBookmark {
 /**
  * 收藏记录Schema
  * @description
- * 1. userId使用email作为唯一标识
+ * 1. userId使用服务端 Auth0 subject
  * 2. 创建复合索引确保每个用户只能收藏一个记录一次
  * 3. 添加创建时间用于后续分析
  */
@@ -36,25 +36,6 @@ const bookmarkSchema = new Schema<IBookmark>({
     type: Date,
     default: Date.now,
   },
-});
-
-// 删除所有现有索引
-bookmarkSchema.pre("save", async function (next) {
-  try {
-    const collection = mongoose.connection.collections["bookmarks"];
-    if (collection) {
-      const indexes = await collection.listIndexes().toArray();
-      for (const index of indexes) {
-        // 保留_id的默认索引
-        if (index.name !== "_id_") {
-          await collection.dropIndex(index.name);
-        }
-      }
-    }
-    next();
-  } catch (error) {
-    next(error as Error);
-  }
 });
 
 // 创建新的复合唯一索引

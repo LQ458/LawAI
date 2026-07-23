@@ -5,12 +5,12 @@ import mongoose, { Schema, Document } from "mongoose";
  * @interface ILike
  * @extends {Document}
  *
- * @property {string} userId - 用户邮箱，作为唯一标识
+ * @property {string} userId - 服务端 Auth0 subject
  * @property {mongoose.Types.ObjectId} recordId - 案例记录ID
  * @property {Date} createdAt - 点赞时间
  */
 export interface ILike extends Document {
-  userId: string; // 使用email作为userId
+  userId: string;
   recordId: mongoose.Types.ObjectId;
   createdAt: Date;
 }
@@ -18,7 +18,7 @@ export interface ILike extends Document {
 /**
  * 点赞记录Schema
  * @description
- * 1. userId使用email作为唯一标识
+ * 1. userId使用服务端 Auth0 subject
  * 2. 创建复合索引确保每个用户只能对每个记录点赞一次
  * 3. 添加创建时间用于后续分析
  */
@@ -36,25 +36,6 @@ const likeSchema = new Schema<ILike>({
     type: Date,
     default: Date.now,
   },
-});
-
-// 删除所有现有索引
-likeSchema.pre("save", async function (next) {
-  try {
-    const collection = mongoose.connection.collections["likes"];
-    if (collection) {
-      const indexes = await collection.listIndexes().toArray();
-      for (const index of indexes) {
-        // 保留_id的默认索引
-        if (index.name !== "_id_") {
-          await collection.dropIndex(index.name);
-        }
-      }
-    }
-    next();
-  } catch (error) {
-    next(error as Error);
-  }
 });
 
 // 创建新的复合唯一索引

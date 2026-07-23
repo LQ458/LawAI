@@ -5,17 +5,18 @@ import { Avatar } from "primereact/avatar";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { Button } from "primereact/button";
 import { ProgressSpinner } from "primereact/progressspinner";
-import { useUser } from "@auth0/nextjs-auth0/client";
 
 interface CaseDetail {
   title: string;
-  link: string;
+  source: string;
+  url?: string;
   id: string;
 }
 
 interface ChatComponentProps {
   role: string;
   message: string;
+  retrievalQuery?: string;
   isTemporary?: boolean;
   onRender?: () => void;
 }
@@ -23,10 +24,10 @@ interface ChatComponentProps {
 const ChatComponent: React.FC<ChatComponentProps> = ({
   role,
   message,
+  retrievalQuery,
   isTemporary = false,
   onRender,
 }) => {
-  const { user } = useUser();
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [isRendered, setIsRendered] = useState(false);
   const [cases, setCases] = useState<CaseDetail[]>([]);
@@ -41,35 +42,47 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   const fetchCaseDetails = useCallback(async () => {
     try {
       setLoadingCases(true);
-      const userId = user?.sub || "anonymous";
-      const response = await fetch(
-        `/api/rag-search?search=${encodeURIComponent(message)}&userId=${userId}`,
-      );
+      const response = await fetch("/api/rag-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: (retrievalQuery || message).slice(0, 1_000),
+        }),
+      });
       if (!response.ok) throw new Error("Failed");
       const res = await response.json();
-      setCases(res.cases || []);
-      setAiSummary(res.data || "");
+      if (res.mode !== "grounded_rag" || res.grounded !== true) {
+        throw new Error("Unexpected retrieval response");
+      }
+      setCases(res.sources || []);
+      setAiSummary(res.answer || "");
+      setHasFetched(true);
     } catch {
-      // ignore
+      setCases([]);
+      setAiSummary("检索服务暂时不可用。当前聊天回复不是检索式 RAG 回答。");
     } finally {
       setLoadingCases(false);
     }
-  }, [message, user?.sub]);
+  }, [message, retrievalQuery]);
 
   useEffect(() => {
-    if (isRendered && !hasFetched) {
+    if (isRendered) {
       onRender?.();
-      if (role === "assistant") {
-        fetchCaseDetails();
-        setHasFetched(true);
-      }
     }
-  }, [isRendered, onRender, role, hasFetched, fetchCaseDetails]);
+  }, [isRendered, onRender]);
 
   const handleMarkdownRender = () => setIsRendered(true);
   const handleCopyMessage = () => {
     setCopiedMessage(true);
     setTimeout(() => setCopiedMessage(false), 2000);
+  };
+
+  const toggleGroundedSources = async () => {
+    const nextVisible = !showCases;
+    setShowCases(nextVisible);
+    if (nextVisible && !hasFetched && !loadingCases) {
+      await fetchCaseDetails();
+    }
   };
 
   const toggleCaseDetail = async (caseId: string) => {
@@ -138,9 +151,19 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
                   severity={cases.length ? "info" : "secondary"}
                   text
                   size="small"
-                  icon={loadingCases ? "pi pi-spin pi-spinner" : showCases ? "pi pi-chevron-up" : "pi pi-book"}
-                  label={cases.length ? `参考案例 · ${cases.length}` : "参考案例"}
-                  onClick={() => setShowCases(!showCases)}
+                  icon={
+                    loadingCases
+                      ? "pi pi-spin pi-spinner"
+                      : showCases
+                        ? "pi pi-chevron-up"
+                        : "pi pi-book"
+                  }
+                  label={
+                    cases.length
+                      ? `检索式依据 · ${cases.length}`
+                      : "单独检索依据"
+                  }
+                  onClick={toggleGroundedSources}
                   disabled={loadingCases}
                 />
               </div>
@@ -166,6 +189,10 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
             {cases.length > 0 ? (
               <>
                 <div className="px-4 pt-3 pb-2">
+                  <p className="mb-2 text-xs font-medium text-gray-500">
+                    以下内容由单独的检索与授权流程生成；上方普通聊天回复未经该次
+                    retrieval，不能视为 RAG-grounded。
+                  </p>
                   <p className="text-gray-600 text-sm leading-relaxed">
                     {aiSummary}
                   </p>
@@ -183,6 +210,9 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
                         </span>
                         <span className="text-blue-600 text-sm flex-1">
                           {c.title}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {c.source}
                         </span>
                         <i
                           className={`pi pi-chevron-${expandedCase === c.id ? "up" : "down"} text-xs text-gray-400`}

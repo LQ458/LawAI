@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingRoot: process.cwd(),
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.ignoreWarnings = [
