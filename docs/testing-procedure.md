@@ -22,9 +22,9 @@ Jest 的 `testMatch` 只收集 `__tests__`，显式排除 `e2e/`。
 
 | Suite                                | 命令                       | 结果                              |
 | ------------------------------------ | -------------------------- | --------------------------------- |
-| Unit/API/component                   | `npm run test:unit`        | 12 suites，53 passed              |
+| Unit/API/component                   | `npm run test:unit`        | 13 suites，61 passed              |
 | Mocked authorization/RAG integration | `npm run test:integration` | 1 suite，5 passed                 |
-| Default Jest total                   | `npm test`                 | 13 suites，58 unique tests passed |
+| Default Jest total                   | `npm test`                 | 14 suites，66 unique tests passed |
 
 重点断言：
 
@@ -38,6 +38,7 @@ Jest 的 `testMatch` 只收集 `__tests__`，显式排除 `e2e/`。
 - chat 读取、更新、删除绑定当前 owner；
 - 普通登录用户访问 admin activity 得到 403；
 - 非法 JSON、错误类型、长度超限和 upstream failure 返回受控状态。
+- secret scan 只放行完整、结构化 placeholder 或完整环境变量引用；同文件中后续真实 URI、对抗性 placeholder 子串和夹带环境引用的值仍会被发现。
 
 ## Playwright external suite
 

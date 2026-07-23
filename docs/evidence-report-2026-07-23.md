@@ -32,14 +32,15 @@ Migration 的预期分类区分 trusted CAIL2018 public、explicit public synthe
 
 ## Test evidence
 
-| 类别                          |  实际结果 | Source / time                          | Definition                                        | Limitation                                               |
-| ----------------------------- | --------: | -------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- |
-| Unit/API/component            | 53 passed | `npm run test:unit`, 2026-07-23        | Jest tests outside `__tests__/integration`        | mocked；不验证真实外部服务                               |
-| Authorization/RAG integration |  5 passed | `npm run test:integration`, 2026-07-23 | mocked integration tests                          | mocked Auth0/FGA/Mongo/Pinecone/DeepSeek                 |
-| Default Jest total            | 58 passed | `npm test`, 2026-07-23                 | 13 suites / 58 unique tests                       | 不含 Playwright                                          |
-| Playwright discovered         |        32 | Playwright `--list`, 2026-07-23        | runtime scenarios in 5 files                      | discovery/review，不是 passing count                     |
-| Playwright actually passed    | 10 passed | specs 01/02, 2026-07-23                | 6 anonymous boundary + 4 Auth0 redirect scenarios | remaining 22 authenticated/data/AI/FGA scenarios not run |
-| 12-query evaluation           |   not run | external evaluation gate, 2026-07-23   | 12 curated queries with four-dimension LLM judge  | 没有真实分数；不等于律师审核                             |
+| 类别                               |  实际结果 | Source / time                            | Definition                                        | Limitation                                            |
+| ---------------------------------- | --------: | ---------------------------------------- | ------------------------------------------------- | ----------------------------------------------------- |
+| Unit/API/component                 | 61 passed | `npm run test:unit`, 2026-07-23          | Jest tests outside `__tests__/integration`        | mocked；不验证真实外部服务                            |
+| Authorization/RAG integration      |  5 passed | `npm run test:integration`, 2026-07-23   | mocked integration tests                          | mocked Auth0/FGA/Mongo/Pinecone/DeepSeek              |
+| Default Jest total                 | 66 passed | `npm test`, 2026-07-23                   | 14 suites / 66 unique tests                       | 不含 Playwright                                       |
+| Playwright discovered              |        32 | Playwright `--list`, 2026-07-23          | runtime scenarios in 5 files                      | discovery/review，不是 passing count                  |
+| Playwright configured-env evidence | 10 passed | external acceptance evidence, 2026-07-23 | 6 anonymous boundary + 4 Auth0 redirect scenarios | 不在 CI 中执行；不验证 authenticated callback session |
+| Playwright placeholder rerun       |      9/10 | external acceptance evidence, 2026-07-23 | same 10 boundary scenarios                        | placeholder tenant 无法完成 provider discovery        |
+| 12-query evaluation                |   not run | external evaluation gate, 2026-07-23     | 12 curated queries with four-dimension LLM judge  | 没有真实分数；不等于律师审核                          |
 
 ## Verification commands
 
@@ -49,16 +50,16 @@ Migration 的预期分类区分 trusted CAIL2018 public、explicit public synthe
 | `npm run lint`                          | passed; 0 warnings/errors                  | ESLint scope is the repository configuration                                                                     |
 | `npm run typecheck`                     | passed                                     | application TypeScript                                                                                           |
 | `npx tsc -p e2e/tsconfig.json --noEmit` | passed                                     | E2E/evaluator TypeScript only                                                                                    |
-| `npm run test:unit`                     | 12 suites / 53 passed                      | mocked; no live credentials                                                                                      |
+| `npm run test:unit`                     | 13 suites / 61 passed                      | mocked; no live credentials                                                                                      |
 | `npm run test:integration`              | 1 suite / 5 passed                         | mocked authorization/RAG services                                                                                |
-| `npm test`                              | 13 suites / 58 unique tests passed         | Jest excludes `e2e/`                                                                                             |
+| `npm test`                              | 14 suites / 66 unique tests passed         | Jest excludes `e2e/`                                                                                             |
 | `npm run build`                         | passed; 21 static/dynamic routes generated | local Node emitted a non-fatal experimental type-stripping warning                                               |
 | model schema load check                 | passed with no duplicate-index warning     | loads Record, UserActivity, Like, Bookmark and Chat schemas; does not create external indexes                    |
 | `npm run audit:prod`                    | 0 production vulnerabilities               | registry result at run time; development deprecations are not production audit findings                          |
-| `npm run scan:secrets:working-tree`     | passed; 136 files scanned                  | current working tree, including the new FGA model/tool files                                                     |
-| `npm run scan:secrets`                  | exit 1; two potential history findings     | values intentionally suppressed; see below                                                                       |
+| `npm run scan:secrets:working-tree`     | passed; 139 files scanned                  | current working tree                                                                                             |
+| `npm run scan:secrets`                  | passed; 139 files / 506 history blobs      | pre-commit history snapshot; structural pattern scan; values intentionally suppressed                            |
 | Playwright `--list`                     | 32 scenarios in 5 files                    | discovery only                                                                                                   |
-| Playwright specs 01/02                  | 10/10 passed                               | real browser run against local production server; redirect boundary only, not an authenticated callback session  |
+| Playwright specs 01/02                  | configured env 10/10; placeholder env 9/10 | external evidence; not run by CI; placeholder failure is provider discovery                                      |
 | ingestion/seed/FGA `--dry-run` commands | passed; zero external writes               | fixture counts are not production dataset counts                                                                 |
 | `npm run fga:model:status`              | passed; 1 model / ready                    | live read-only aggregate; identifiers omitted                                                                    |
 | `npm run fga:model:apply`               | passed as zero-write no-op after creation  | live store has exactly one required model; no tuple read/write                                                   |
@@ -67,12 +68,9 @@ Migration 的预期分类区分 trusted CAIL2018 public、explicit public synthe
 
 ### Full-history secret scan
 
-The scanner reported only the following paths/rules:
+`npm run scan:secrets` passed across 139 current files and 506 unique reachable history blobs in the pre-commit verification snapshot; later commits can increase the unique-blob count. Two earlier findings were rechecked without displaying their values: the historical README match used placeholder username/password structure, and the historical `CLAUDE.md` match was a simple non-credentialed MongoDB example URI. The scanner now recognizes only complete, structured placeholder values or complete environment references without a path allowlist; adversarial placeholder substrings, arbitrary bracketed values, embedded environment-reference strings, later real URIs in the same file, credential-bearing MongoDB URIs and non-placeholder sensitive assignments remain findings.
 
-- `history:README.md: credentialed-mongodb-uri`
-- `history:CLAUDE.md: sensitive-env-assignment`
-
-No value was printed or inspected during this report. Whether each match is a real credential remains unverified. If either was ever valid, rotate/revoke it first. Removing it from reachable git history would require an explicitly authorized history rewrite and coordinated force-push; no history rewrite was performed.
+This is a bounded pattern scan, not proof that no secret has ever existed. These two placeholder-shaped findings do not justify credential rotation or a history rewrite, and neither action was performed.
 
 ## Verified in mocked/local scope
 
@@ -111,21 +109,34 @@ The service accepted the first model write, but the initial local post-write ver
 - MongoDB metadata category counts and schema migration result;
 - MongoDB–Pinecone document ID coverage;
 - real DeepSeek grounded answer quality;
+- completed Auth0 callback on the protected Preview;
 - authenticated chat/summary external E2E;
 - production-like rate limiting across multiple instances;
 - legal accuracy, jurisdictional applicability or lawyer review.
 
 ## Deployment and activity evidence
 
-No `.vercel` project metadata or Vercel CLI was present in the repository workspace. No preview was created and no public deployment was inferred.
+At 2026-07-23 19:33 +08, Vercel CLI listed two READY Preview deployments for the maintenance branch. Project protection applies SSO to all previews; these deployments are access-protected, not public, and not production. `vercel.json` disables Git-triggered deployment from `main`, so merging does not authorize or initiate a production deployment.
 
-| Metric                        | Result      | Definition / limitation                                                                                                                              |
+Protected Preview smoke results:
+
+| Check                          | Result  | Definition / limitation                                                       |
+| ------------------------------ | ------- | ----------------------------------------------------------------------------- |
+| `/`                            | 200     | authenticated protection bypass; prototype/legal-information boundary visible |
+| `/admin`                       | 401     | anonymous request                                                             |
+| `/api/admin/activity`          | 401     | anonymous request                                                             |
+| GET `/api/rag-search`          | 405     | POST-only boundary                                                            |
+| malformed JSON RAG POST        | 400     | request validation                                                            |
+| anonymous public RAG POST      | 502     | request reached the app; MongoDB upstream unavailable                         |
+| Auth0 login/callback discovery | blocked | redirect origin corrected; provider callback allowlist still rejects Preview  |
+
+| Metric                        | Result      | Source / window / definition / limitation                                                                                                            |
 | ----------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vercel Web Analytics enabled  | unavailable | no associated project evidence                                                                                                                       |
-| Page views                    | unavailable | no analytics window/data                                                                                                                             |
-| Unique visitors               | unavailable | no analytics window/data                                                                                                                             |
-| Requests/function invocations | unavailable | no project telemetry                                                                                                                                 |
-| Error rate                    | unavailable | no project telemetry                                                                                                                                 |
+| Vercel Web Analytics enabled  | yes         | read-only project settings, 2026-07-23 19:33 +08; enabled does not imply traffic data                                                                |
+| Page views                    | 0 returned  | `vercel.analytics_pageview.count`, 2026-07-22T11:33:06Z–2026-07-23T11:33:06Z; protected/bot smoke traffic may not be counted                         |
+| Unique visitors               | 0 returned  | unique `visitor_id` over the same 24-hour window; distinct from page views and accounts                                                              |
+| Requests/function invocations | unavailable | observability metric query required an unavailable paid capability; not estimated                                                                    |
+| Error rate                    | unavailable | request/invocation counts were unavailable, so no denominator or rate was inferred                                                                   |
 | Registered accounts           | unavailable | no Auth0 tenant aggregate                                                                                                                            |
 | Active authenticated accounts | unavailable | no reachable activity store; defined as distinct authenticated Auth0 subjects with rate-limited, client-reported recorded actions in a stated window |
 

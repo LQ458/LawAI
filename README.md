@@ -102,13 +102,13 @@ Migration 只把有可信 CAIL2018 provenance 或已有显式 public 标记的�
 
 | 命令                       | 实际结果                          |
 | -------------------------- | --------------------------------- |
-| `npm run test:unit`        | 12 suites，53 tests passed        |
+| `npm run test:unit`        | 13 suites，61 tests passed        |
 | `npm run test:integration` | 1 suite，5 tests passed           |
-| `npm test`                 | 13 suites，58 unique tests passed |
+| `npm test`                 | 14 suites，66 unique tests passed |
 
 这些测试不依赖真实 Auth0、FGA、MongoDB、Pinecone 或 DeepSeek credential。覆盖伪造 `userId`、explicit-public anonymous access、restricted allow/deny、FGA fail-closed、denied context exclusion、authorized-only citations、chat ownership、admin 403、输入边界和外部服务错误。
 
-Playwright 当前可发现 32 个场景。本次实际运行并通过了 10 个浏览器场景：6 个 anonymous UI/API boundary 和 4 个 Auth0 login/logout redirect boundary。其余 22 个需要 MongoDB、DeepSeek、受控 Auth0 session 或 FGA fixtures，本次没有运行，不能计为 passing。详见 `docs/testing-procedure.md`。
+Playwright 当前可发现 32 个场景。配置完整的外部环境证据记录了 10 个浏览器场景通过：6 个 anonymous UI/API boundary 和 4 个 Auth0 login/logout redirect boundary；这组测试不在 CI 中执行。另一次 placeholder Auth0 环境复跑为 9/10，唯一失败来自 placeholder tenant 无法完成 provider discovery。其余 22 个需要 MongoDB、DeepSeek、受控 Auth0 session 或 FGA fixtures，本次没有运行，不能计为 passing。详见 `docs/testing-procedure.md`。
 
 配置指向的 FGA store 已完成 token exchange、只读 model 查询、一次空-store model 创建和写后验证；当前恰好一个所需 model。未写入用户/department/document tuple，也没有 manager/employee session，因此这不等于 restricted allow/deny E2E 已通过。
 
@@ -127,7 +127,9 @@ Automated evaluation 不等于律师审核。本次没有运行 12-query evaluat
 
 ## 部署
 
-仓库当前没有已关联的本地 Vercel project metadata，因此本次未创建 preview，也没有可验证的公开 deployment、Web Analytics 或 traffic/account metrics。若以后关联项目，只应先创建 preview，配置 Auth0 callback，并验证 public retrieval、restricted allow/deny、chat ownership 和 admin 403；不要未经明确授权把它公开部署为法律咨询服务。
+截至 2026-07-23，Vercel Git integration 已为维护分支创建 access-protected Preview；检查时有两个 READY Preview。它们受 Deployment Protection/SSO 保护，不是公开站点，也不是 production deployment。通过受保护通道完成的 smoke test 验证了首页边界文案、anonymous admin 401、RAG GET 405 和 malformed JSON 400；MongoDB 仍不可达，Auth0 provider 也尚未允许该 Preview callback，因此 public retrieval、authenticated chat ownership 和真实 restricted allow/deny 尚未完成 Preview 验证。
+
+`vercel.json` 明确禁用 `main` 的 Git 自动部署，合并代码不等于授权 production deployment。任何 production deployment 都必须另行获得明确授权并重新验证 Auth0 callback、public retrieval、restricted allow/deny、chat ownership 和 admin 403。
 
 ## License
 
